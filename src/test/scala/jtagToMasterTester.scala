@@ -27,52 +27,52 @@ import jtag._
 
 class TLJTAGToMasterBlockTester(dut: TLJTAGToMasterBlock) extends PeekPokeTester(dut.module) {
   
-  def jtagReset() {
+  def jtagReset(stepSize: Int = 1) {
     var i = 0
     while (i < 5) {
       poke(dut.ioJTAG.jtag.TCK, 0)
       poke(dut.ioJTAG.jtag.TMS, 1)
-      step(1)
+      step(stepSize)
       poke(dut.ioJTAG.jtag.TCK, 1)
-      step(1)
+      step(stepSize)
       i += 1
     }
   }
   
-  def jtagSend(data: BigInt, dataLength: Int, data_notInstruction: Boolean = true, state_reset_notIdle: Boolean = true) {
+  def jtagSend(data: BigInt, dataLength: Int, data_notInstruction: Boolean = true, state_reset_notIdle: Boolean = true, stepSize: Int = 1) {
     
     if (state_reset_notIdle) {
       poke(dut.ioJTAG.jtag.TCK, 0)
       poke(dut.ioJTAG.jtag.TMS, 0)
-      step(1)
+      step(stepSize)
       poke(dut.ioJTAG.jtag.TCK, 1)
-      step(1)
+      step(stepSize)
     }
     
     poke(dut.ioJTAG.jtag.TCK, 0)
     poke(dut.ioJTAG.jtag.TMS, 1)
-    step(1)
+    step(stepSize)
     poke(dut.ioJTAG.jtag.TCK, 1)
-    step(1)
+    step(stepSize)
     
     if (!data_notInstruction) {
       poke(dut.ioJTAG.jtag.TCK, 0)
       poke(dut.ioJTAG.jtag.TMS, 1)
-      step(1)
+      step(stepSize)
       poke(dut.ioJTAG.jtag.TCK, 1)
-      step(1)
+      step(stepSize)
     }
     
     poke(dut.ioJTAG.jtag.TCK, 0)
     poke(dut.ioJTAG.jtag.TMS, 0)
-    step(1)
+    step(stepSize)
     poke(dut.ioJTAG.jtag.TCK, 1)
-    step(1)
+    step(stepSize)
     poke(dut.ioJTAG.jtag.TCK, 0)
     poke(dut.ioJTAG.jtag.TMS, 0)
-    step(1)
+    step(stepSize)
     poke(dut.ioJTAG.jtag.TCK, 1)
-    step(1)
+    step(stepSize)
     
     var i = 0
     //while (i < instructionLength) {
@@ -80,62 +80,64 @@ class TLJTAGToMasterBlockTester(dut: TLJTAGToMasterBlock) extends PeekPokeTester
       poke(dut.ioJTAG.jtag.TCK, 0)
       poke(dut.ioJTAG.jtag.TMS, 0)
       poke(dut.ioJTAG.jtag.TDI, data.testBit(i))
-      step(1)
+      step(stepSize)
       poke(dut.ioJTAG.jtag.TCK, 1)
-      step(1)
+      step(stepSize)
       i += 1
     }
     
     poke(dut.ioJTAG.jtag.TCK, 0)
     poke(dut.ioJTAG.jtag.TMS, 1)  // 0
     poke(dut.ioJTAG.jtag.TDI, data.testBit(i))
-    step(1)
+    step(stepSize)
     poke(dut.ioJTAG.jtag.TCK, 1)
-    step(1)
+    step(stepSize)
     
     poke(dut.ioJTAG.jtag.TCK, 0)
     poke(dut.ioJTAG.jtag.TMS, 1)
     poke(dut.ioJTAG.jtag.TDI, 0)
-    step(1)
+    step(stepSize)
     poke(dut.ioJTAG.jtag.TCK, 1)
-    step(1)
+    step(stepSize)
     /*poke(dut.ioJTAG.jtag.TCK, 0)
     poke(dut.ioJTAG.jtag.TMS, 1)
-    step(1)
+    step(stepSize)
     poke(dut.ioJTAG.jtag.TCK, 1)
-    step(1)*/
+    step(stepSize)*/
     poke(dut.ioJTAG.jtag.TCK, 0)
     poke(dut.ioJTAG.jtag.TMS, 0)
-    step(1)
+    step(stepSize)
     poke(dut.ioJTAG.jtag.TCK, 1)
-    step(1)
+    step(stepSize)
   }
+  
+  val stepSize = 5
   
   step(5)
   poke(dut.ioTL.a.ready, 1)
   
-  jtagReset()
-  jtagSend(BigInt("010", 2), 3, false, true)
-  jtagSend(BigInt("0"*8 ++ "01010000", 2), 16, true, false)
-  jtagSend(BigInt("011", 2), 3, false, false)
-  jtagSend(BigInt("00101000", 2), 8, true, false)
-  jtagSend(BigInt("001", 2), 3, false, false)
+  jtagReset(stepSize)
+  jtagSend(BigInt("010", 2), 3, false, true, stepSize)
+  jtagSend(BigInt("0"*8 ++ "01010000", 2), 16, true, false, stepSize)
+  jtagSend(BigInt("011", 2), 3, false, false, stepSize)
+  jtagSend(BigInt("00101000", 2), 8, true, false, stepSize)
+  jtagSend(BigInt("001", 2), 3, false, false, stepSize)
   
   
   poke(dut.ioJTAG.jtag.TCK, 0)
-  step(1)
+  step(stepSize)
   poke(dut.ioJTAG.jtag.TCK, 1)
-  step(1)
+  step(stepSize)
   poke(dut.ioJTAG.jtag.TCK, 0)
-  step(1)
+  step(stepSize)
   poke(dut.ioJTAG.jtag.TCK, 1)
-  step(1)
+  step(stepSize)
   poke(dut.ioJTAG.jtag.TCK, 0)
-  step(1)
+  step(stepSize)
   poke(dut.ioJTAG.jtag.TCK, 1)
-  step(1)
+  step(stepSize)
   poke(dut.ioJTAG.jtag.TCK, 0)
-  step(1)
+  step(stepSize)
   
   step(10)
   poke(dut.ioTL.d.valid, 1)
@@ -147,27 +149,27 @@ class TLJTAGToMasterBlockTester(dut: TLJTAGToMasterBlock) extends PeekPokeTester
   step(10)
   
   
-  jtagSend(BigInt("011", 2), 3, false, false)
-  jtagSend(BigInt("01101111", 2), 8, true, false)
-  jtagSend(BigInt("010", 2), 3, false, false)
-  jtagSend(BigInt("0"*8 ++ "01110000", 2), 16, true, false)
-  jtagSend(BigInt("001", 2), 3, false, false)
+  jtagSend(BigInt("011", 2), 3, false, false, stepSize)
+  jtagSend(BigInt("01101111", 2), 8, true, false, stepSize)
+  jtagSend(BigInt("010", 2), 3, false, false, stepSize)
+  jtagSend(BigInt("0"*8 ++ "01110000", 2), 16, true, false, stepSize)
+  jtagSend(BigInt("001", 2), 3, false, false, stepSize)
   
   
   poke(dut.ioJTAG.jtag.TCK, 0)
-  step(1)
+  step(stepSize)
   poke(dut.ioJTAG.jtag.TCK, 1)
-  step(1)
+  step(stepSize)
   poke(dut.ioJTAG.jtag.TCK, 0)
-  step(1)
+  step(stepSize)
   poke(dut.ioJTAG.jtag.TCK, 1)
-  step(1)
+  step(stepSize)
   poke(dut.ioJTAG.jtag.TCK, 0)
-  step(1)
+  step(stepSize)
   poke(dut.ioJTAG.jtag.TCK, 1)
-  step(1)
+  step(stepSize)
   poke(dut.ioJTAG.jtag.TCK, 0)
-  step(1)
+  step(stepSize)
   
   step(10)
   poke(dut.ioTL.d.valid, 1)
@@ -183,111 +185,113 @@ class TLJTAGToMasterBlockTester(dut: TLJTAGToMasterBlock) extends PeekPokeTester
 
 class AXI4JTAGToMasterBlockTester(dut: AXI4JTAGToMasterBlock) extends PeekPokeTester(dut.module) {
   
-  def jtagReset() {
+  def jtagReset(stepSize: Int = 1) {
     var i = 0
     while (i < 5) {
       poke(dut.ioJTAG.jtag.TCK, 0)
       poke(dut.ioJTAG.jtag.TMS, 1)
-      step(1)
+      step(stepSize)
       poke(dut.ioJTAG.jtag.TCK, 1)
-      step(1)
+      step(stepSize)
       i += 1
     }
   }
   
-  def jtagSend(data: BigInt, dataLength: Int, data_notInstruction: Boolean = true, state_reset_notIdle: Boolean = true) {
+  def jtagSend(data: BigInt, dataLength: Int, data_notInstruction: Boolean = true, state_reset_notIdle: Boolean = true, stepSize: Int = 1) {
     
     if (state_reset_notIdle) {
       poke(dut.ioJTAG.jtag.TCK, 0)
       poke(dut.ioJTAG.jtag.TMS, 0)
-      step(1)
+      step(stepSize)
       poke(dut.ioJTAG.jtag.TCK, 1)
-      step(1)
+      step(stepSize)
     }
     
     poke(dut.ioJTAG.jtag.TCK, 0)
     poke(dut.ioJTAG.jtag.TMS, 1)
-    step(1)
+    step(stepSize)
     poke(dut.ioJTAG.jtag.TCK, 1)
-    step(1)
+    step(stepSize)
     
     if (!data_notInstruction) {
       poke(dut.ioJTAG.jtag.TCK, 0)
       poke(dut.ioJTAG.jtag.TMS, 1)
-      step(1)
+      step(stepSize)
       poke(dut.ioJTAG.jtag.TCK, 1)
-      step(1)
+      step(stepSize)
     }
     
     poke(dut.ioJTAG.jtag.TCK, 0)
     poke(dut.ioJTAG.jtag.TMS, 0)
-    step(1)
+    step(stepSize)
     poke(dut.ioJTAG.jtag.TCK, 1)
-    step(1)
+    step(stepSize)
     poke(dut.ioJTAG.jtag.TCK, 0)
     poke(dut.ioJTAG.jtag.TMS, 0)
-    step(1)
+    step(stepSize)
     poke(dut.ioJTAG.jtag.TCK, 1)
-    step(1)
+    step(stepSize)
     
     var i = 0
     while (i < dataLength - 1) {
       poke(dut.ioJTAG.jtag.TCK, 0)
       poke(dut.ioJTAG.jtag.TMS, 0)
       poke(dut.ioJTAG.jtag.TDI, data.testBit(i))
-      step(1)
+      step(stepSize)
       poke(dut.ioJTAG.jtag.TCK, 1)
-      step(1)
+      step(stepSize)
       i += 1
     }
     
     poke(dut.ioJTAG.jtag.TCK, 0)
     poke(dut.ioJTAG.jtag.TMS, 1)  // 0
     poke(dut.ioJTAG.jtag.TDI, data.testBit(i))
-    step(1)
+    step(stepSize)
     poke(dut.ioJTAG.jtag.TCK, 1)
-    step(1)
+    step(stepSize)
     
     poke(dut.ioJTAG.jtag.TCK, 0)
     poke(dut.ioJTAG.jtag.TMS, 1)
     poke(dut.ioJTAG.jtag.TDI, 0)
-    step(1)
+    step(stepSize)
     poke(dut.ioJTAG.jtag.TCK, 1)
-    step(1)
+    step(stepSize)
     
     poke(dut.ioJTAG.jtag.TCK, 0)
     poke(dut.ioJTAG.jtag.TMS, 0)
-    step(1)
+    step(stepSize)
     poke(dut.ioJTAG.jtag.TCK, 1)
-    step(1)
+    step(stepSize)
   }
+  
+  val stepSize = 5
   
   step(5)
   poke(dut.ioAXI4.w.ready, 1)
   poke(dut.ioAXI4.aw.ready, 1)
   
-  jtagReset()
-  jtagSend(BigInt("010", 2), 3, false, true)
-  jtagSend(BigInt("0"*8 ++ "01010000", 2), 16, true, false)
-  jtagSend(BigInt("011", 2), 3, false, false)
-  jtagSend(BigInt("00101000", 2), 8, true, false)
-  jtagSend(BigInt("001", 2), 3, false, false)
+  jtagReset(stepSize)
+  jtagSend(BigInt("010", 2), 3, false, true, stepSize)
+  jtagSend(BigInt("0"*8 ++ "01010000", 2), 16, true, false, stepSize)
+  jtagSend(BigInt("011", 2), 3, false, false, stepSize)
+  jtagSend(BigInt("00101000", 2), 8, true, false, stepSize)
+  jtagSend(BigInt("001", 2), 3, false, false, stepSize)
   
   
   poke(dut.ioJTAG.jtag.TCK, 0)
-  step(1)
+  step(stepSize)
   poke(dut.ioJTAG.jtag.TCK, 1)
-  step(1)
+  step(stepSize)
   poke(dut.ioJTAG.jtag.TCK, 0)
-  step(1)
+  step(stepSize)
   poke(dut.ioJTAG.jtag.TCK, 1)
-  step(1)
+  step(stepSize)
   poke(dut.ioJTAG.jtag.TCK, 0)
-  step(1)
+  step(stepSize)
   poke(dut.ioJTAG.jtag.TCK, 1)
-  step(1)
+  step(stepSize)
   poke(dut.ioJTAG.jtag.TCK, 0)
-  step(1)
+  step(stepSize)
   
   step(10)
   poke(dut.ioAXI4.b.valid, 1)
@@ -297,27 +301,27 @@ class AXI4JTAGToMasterBlockTester(dut: AXI4JTAGToMasterBlock) extends PeekPokeTe
   step(10)
   
   
-  jtagSend(BigInt("011", 2), 3, false, false)
-  jtagSend(BigInt("01101111", 2), 8, true, false)
-  jtagSend(BigInt("010", 2), 3, false, false)
-  jtagSend(BigInt("0"*8 ++ "01110000", 2), 16, true, false)
-  jtagSend(BigInt("001", 2), 3, false, false)
+  jtagSend(BigInt("011", 2), 3, false, false, stepSize)
+  jtagSend(BigInt("01101111", 2), 8, true, false, stepSize)
+  jtagSend(BigInt("010", 2), 3, false, false, stepSize)
+  jtagSend(BigInt("0"*8 ++ "01110000", 2), 16, true, false, stepSize)
+  jtagSend(BigInt("001", 2), 3, false, false, stepSize)
   
   
   poke(dut.ioJTAG.jtag.TCK, 0)
-  step(1)
+  step(stepSize)
   poke(dut.ioJTAG.jtag.TCK, 1)
-  step(1)
+  step(stepSize)
   poke(dut.ioJTAG.jtag.TCK, 0)
-  step(1)
+  step(stepSize)
   poke(dut.ioJTAG.jtag.TCK, 1)
-  step(1)
+  step(stepSize)
   poke(dut.ioJTAG.jtag.TCK, 0)
-  step(1)
+  step(stepSize)
   poke(dut.ioJTAG.jtag.TCK, 1)
-  step(1)
+  step(stepSize)
   poke(dut.ioJTAG.jtag.TCK, 0)
-  step(1)
+  step(stepSize)
   
   step(10)
   poke(dut.ioAXI4.b.valid, 1)
