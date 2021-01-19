@@ -23,6 +23,9 @@ import jtag._
 
 class JtagToMasterControllerIO(irLength: Int, beatBytes: Int) extends JtagBlockIO(irLength) {
   val dataOut = Output(UInt((beatBytes*8).W))
+  val dataIn = Input(UInt((beatBytes*8).W))
+  val validIn = Input(Bool())
+  val receivedIn = Output(Bool())
 }
 
 class topModuleIO extends Bundle {
@@ -101,6 +104,22 @@ class JtagController(irLength: Int, initialInstruction: BigInt, beatBytes: Int) 
   }
   
   io.dataOut := currentData
+  
+  val dataInReg = RegInit(UInt((beatBytes*8).W), 0.U)
+  val indicator = RegInit(Bool(), false.B)
+  when(io.validIn) {dataInReg := io.dataIn}
+  val counterTDO = RegInit(UInt(7.W), 0.U)
+  when(RegNext(io.validIn)) {io.receivedIn := true.B} .otherwise {io.receivedIn := false.B}
+  when(io.validIn) {indicator := true.B} .elsewhen(counterTDO === (8*beatBytes-1).U) {indicator := false.B}
+  when(indicator) {counterTDO := counterTDO + 1.U} .otherwise {counterTDO := 0.U}
+  
+  when(indicator) {
+    tdo := dataInReg(counterTDO)
+    tdo_driven := true.B
+  } .otherwise {
+    tdo := false.B
+    tdo_driven := false.B
+  }
 
 }
 
@@ -128,9 +147,11 @@ class JTAGToMasterTL[D, U, E, O, B <: Data](irLength: Int, initialInstruction: B
     controller.io.jtag.TDI := io.jtag.TDI
     io.jtag.TDO := controller.io.jtag.TDO
     controller.io.control.fsmAsyncReset := io.asyncReset
+    controller.io.validIn := DontCare
+    controller.io.dataIn := DontCare
     
     object State extends ChiselEnum {
-      val sIdle, sSetDataA, sResetValidA, sSetReadyD, sReceiveDataD = Value
+      val sIdle, sSetDataA, sResetValidA, sSetReadyD, sReceiveDataD, sSetReadAddress, sReadData, sDataForward = Value
     }
     val state = RegInit(State.sIdle)
     
@@ -155,39 +176,62 @@ class JTAGToMasterTL[D, U, E, O, B <: Data](irLength: Int, initialInstruction: B
       shouldWrite := false.B
     }
     
+    val shouldRead = RegInit(Bool(), false.B)
+    when ((currentInstruction === "b100".U) && (RegNext(currentInstruction)=/= "b100".U)) {
+      shouldRead := true.B
+    } .elsewhen(state === State.sSetReadAddress) {
+      shouldRead := false.B
+    }
+    
+    val readData = RegInit(UInt((beatBytes * 8).W), 0.U)
+    
+    val size = if (beatBytes == 4) 2 else 3
     
     switch (state) {
       is (State.sIdle) {
         when (shouldWrite) {
           state := State.sSetDataA
+        } .elsewhen (shouldRead) {
+          state := State.sSetReadAddress
         }
         
         tl.d.ready := false.B
         tl.a.valid := false.B
-        
+
         tl.a.bits.opcode := 0.U
         tl.a.bits.param := 0.U
-        tl.a.bits.size := 2.U
-        tl.a.bits.source := 1.U
+        tl.a.bits.size := size.U
+        tl.a.bits.source := 0.U
         tl.a.bits.address := 0.U
         tl.a.bits.mask := 255.U
         tl.a.bits.data := 0.U
+        
+        controller.io.validIn := false.B
+        controller.io.dataIn := 0.U
       }
       is (State.sSetDataA) {
-        when (tl.a.ready) {
-          state := State.sResetValidA
+        //when (tl.a.ready) {
+          //state := State.sResetValidA
+        //when (!tl.a.ready) {
+          //state := State.sSetReadyD
+        when (tl.d.valid) {
+          state := State.sIdle
         }
         
-        tl.d.ready := false.B
+        //tl.d.ready := false.B
+        tl.d.ready := true.B
         tl.a.valid := true.B
         
         tl.a.bits.opcode := 0.U
         tl.a.bits.param := 0.U
-        tl.a.bits.size := 2.U
-        tl.a.bits.source := 1.U
+        tl.a.bits.size := size.U
+        tl.a.bits.source := 0.U
         tl.a.bits.address := addressValue
         tl.a.bits.mask := 255.U
         tl.a.bits.data := dataValue
+        
+        controller.io.validIn := false.B
+        controller.io.dataIn := 0.U
       }
       is (State.sResetValidA) {
         state := State.sSetReadyD
@@ -197,15 +241,19 @@ class JTAGToMasterTL[D, U, E, O, B <: Data](irLength: Int, initialInstruction: B
         
         tl.a.bits.opcode := 0.U
         tl.a.bits.param := 0.U
-        tl.a.bits.size := 2.U
-        tl.a.bits.source := 1.U
+        tl.a.bits.size := size.U
+        tl.a.bits.source := 0.U
         tl.a.bits.address := 0.U
         tl.a.bits.mask := 255.U
         tl.a.bits.data := 0.U
+        
+        controller.io.validIn := false.B
+        controller.io.dataIn := 0.U
       }
       is (State.sSetReadyD) {
         when (tl.d.valid) {
-          state := State.sReceiveDataD
+          //state := State.sReceiveDataD
+          state := State.sIdle
         }
         
         tl.d.ready := true.B
@@ -213,11 +261,14 @@ class JTAGToMasterTL[D, U, E, O, B <: Data](irLength: Int, initialInstruction: B
         
         tl.a.bits.opcode := 0.U
         tl.a.bits.param := 0.U
-        tl.a.bits.size := 2.U
-        tl.a.bits.source := 1.U
+        tl.a.bits.size := size.U
+        tl.a.bits.source := 0.U
         tl.a.bits.address := 0.U
         tl.a.bits.mask := 255.U
         tl.a.bits.data := 0.U
+        
+        controller.io.validIn := false.B
+        controller.io.dataIn := 0.U
       }
       is (State.sReceiveDataD) {
         state := State.sIdle
@@ -227,11 +278,78 @@ class JTAGToMasterTL[D, U, E, O, B <: Data](irLength: Int, initialInstruction: B
         
         tl.a.bits.opcode := 0.U
         tl.a.bits.param := 0.U
-        tl.a.bits.size := 2.U
-        tl.a.bits.source := 1.U
+        tl.a.bits.size := size.U
+        tl.a.bits.source := 0.U
         tl.a.bits.address := 0.U
         tl.a.bits.mask := 255.U
         tl.a.bits.data := 0.U
+        
+        controller.io.validIn := false.B
+        controller.io.dataIn := 0.U
+      }
+      is (State.sSetReadAddress) {
+        //when (tl.a.ready) {
+          //state := State.sReadData
+        when (tl.d.valid) {
+          state := State.sDataForward
+        }
+        
+        //tl.d.ready := false.B
+        tl.d.ready := true.B
+        tl.a.valid := true.B
+        
+        tl.a.bits.opcode := 4.U
+        tl.a.bits.param := 0.U
+        tl.a.bits.size := size.U
+        tl.a.bits.source := 0.U
+        tl.a.bits.address := addressValue
+        tl.a.bits.mask := 255.U
+        tl.a.bits.data := 0.U
+        
+        readData := tl.d.bits.data
+        
+        controller.io.validIn := false.B
+        controller.io.dataIn := 0.U
+      }
+      is (State.sReadData) {
+        when (tl.d.valid) {
+          state := State.sDataForward
+        }
+        
+        tl.d.ready := true.B
+        tl.a.valid := false.B
+        
+        tl.a.bits.opcode := 0.U
+        tl.a.bits.param := 0.U
+        tl.a.bits.size := size.U
+        tl.a.bits.source := 0.U
+        tl.a.bits.address := 0.U
+        tl.a.bits.mask := 255.U
+        tl.a.bits.data := 0.U
+        
+        readData := tl.d.bits.data
+        
+        controller.io.validIn := false.B
+        controller.io.dataIn := 0.U
+      }
+      is (State.sDataForward) {
+        when (controller.io.receivedIn) {
+          state := State.sIdle
+        }
+        
+        tl.d.ready := false.B
+        tl.a.valid := false.B
+        
+        tl.a.bits.opcode := 0.U
+        tl.a.bits.param := 0.U
+        tl.a.bits.size := size.U
+        tl.a.bits.source := 0.U
+        tl.a.bits.address := 0.U
+        tl.a.bits.mask := 255.U
+        tl.a.bits.data := 0.U
+        
+        controller.io.validIn := true.B
+        controller.io.dataIn := readData
       }
     }
 
@@ -298,9 +416,11 @@ class JTAGToMasterAXI4(irLength: Int, initialInstruction: BigInt, beatBytes: Int
     controller.io.jtag.TDI := io.jtag.TDI
     io.jtag.TDO := controller.io.jtag.TDO
     controller.io.control.fsmAsyncReset := io.asyncReset
+    controller.io.validIn := DontCare
+    controller.io.dataIn := DontCare
     
     object State extends ChiselEnum {
-      val sIdle, sSetDataAndAddress, sResetCounterW, sSetReadyB = Value
+      val sIdle, sSetDataAndAddress, sResetCounterW, sSetReadyB, sSetReadAddress, sResetCounterR, sSetReadyR, sDataForward = Value
     }
     val state = RegInit(State.sIdle)
     
@@ -325,6 +445,15 @@ class JTAGToMasterAXI4(irLength: Int, initialInstruction: BigInt, beatBytes: Int
       shouldWrite := false.B
     }
     
+    val shouldRead = RegInit(Bool(), false.B)
+    when ((currentInstruction === "b100".U) && (RegNext(currentInstruction)=/= "b100".U)) {
+      shouldRead := true.B
+    } .elsewhen(state === State.sSetReadAddress) {
+      shouldRead := false.B
+    }
+    
+    val readData = RegInit(UInt((beatBytes * 8).W), 0.U)
+    
     val dataSize = if (beatBytes == 4) 2 else 3
     
     def maxWait = 500
@@ -334,6 +463,8 @@ class JTAGToMasterAXI4(irLength: Int, initialInstruction: BigInt, beatBytes: Int
       is (State.sIdle) {
         when (shouldWrite) {
           state := State.sSetDataAndAddress
+        } .elsewhen (shouldRead) {
+          state := State.sSetReadAddress
         }
         ioNode.aw.valid := false.B
         ioNode.w.valid := false.B
@@ -344,6 +475,12 @@ class JTAGToMasterAXI4(irLength: Int, initialInstruction: BigInt, beatBytes: Int
         ioNode.w.bits.data := 0.U
         ioNode.w.bits.last := false.B
         ioNode.w.bits.strb := 255.U
+        
+        ioNode.ar.valid := false.B
+        ioNode.r.ready := false.B
+        
+        controller.io.validIn := false.B
+        controller.io.dataIn := 0.U
         
         counter := 0.U
       }
@@ -363,7 +500,9 @@ class JTAGToMasterAXI4(irLength: Int, initialInstruction: BigInt, beatBytes: Int
         ioNode.w.bits.last := true.B
         ioNode.w.bits.strb := 255.U
         
-        //require(counter < maxWait.U, s"Timeout waiting for AW or W to be ready ($maxWait cycles)")
+        controller.io.validIn := false.B
+        controller.io.dataIn := 0.U
+        
         counter := counter + 1.U
       }
       is (State.sResetCounterW) {
@@ -372,6 +511,9 @@ class JTAGToMasterAXI4(irLength: Int, initialInstruction: BigInt, beatBytes: Int
         ioNode.aw.valid := false.B
         ioNode.w.valid := false.B
         ioNode.b.ready := false.B
+        
+        controller.io.validIn := false.B
+        controller.io.dataIn := 0.U
         
         counter := 0.U
       }
@@ -391,8 +533,61 @@ class JTAGToMasterAXI4(irLength: Int, initialInstruction: BigInt, beatBytes: Int
         ioNode.w.bits.last := false.B
         ioNode.w.bits.strb := 255.U
         
-        //require(counter < maxWait.U, s"Timeout waiting for AW or W to be ready ($maxWait cycles)")
+        controller.io.validIn := false.B
+        controller.io.dataIn := 0.U
+        
         counter := counter + 1.U
+      }
+      is (State.sSetReadAddress) {
+        when (ioNode.ar.ready) {
+          state := State.sResetCounterR
+        } .elsewhen(counter >= maxWait.U) {
+          state := State.sIdle
+        }
+        ioNode.ar.valid := true.B
+        ioNode.r.ready := false.B
+        
+        ioNode.ar.bits.addr := addressValue
+        ioNode.ar.bits.size := dataSize.U
+        
+        controller.io.validIn := false.B
+        controller.io.dataIn := 0.U
+        
+        counter := counter + 1.U
+      }
+      is (State.sResetCounterR) {
+        state := State.sSetReadyR
+        
+        ioNode.ar.valid := false.B
+        ioNode.r.ready := false.B
+        
+        controller.io.validIn := false.B
+        controller.io.dataIn := 0.U
+        
+        counter := 0.U
+      }
+      is (State.sSetReadyR) {
+        when (ioNode.r.valid && (ioNode.r.bits.resp === 0.U) && (ioNode.r.bits.id === ioNode.ar.bits.id)) {
+          state := State.sDataForward
+        } .elsewhen(counter >= maxWait.U) {
+          state := State.sIdle
+        }
+        ioNode.ar.valid := false.B
+        ioNode.r.ready := true.B
+        
+        readData := ioNode.r.bits.data
+        
+        controller.io.validIn := false.B
+        controller.io.dataIn := 0.U
+        
+        counter := counter + 1.U
+      }
+      is (State.sDataForward) {
+        when (controller.io.receivedIn) {
+          state := State.sIdle
+        }
+        controller.io.dataIn := readData
+        controller.io.validIn := true.B
       }
     }
 

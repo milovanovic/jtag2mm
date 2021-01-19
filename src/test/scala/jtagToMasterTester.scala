@@ -179,6 +179,34 @@ class TLJTAGToMasterBlockTester(dut: TLJTAGToMasterBlock) extends PeekPokeTester
   step(1)
   poke(dut.ioTL.d.valid, 0)
   step(10)
+  
+  jtagSend(BigInt("100", 2), 3, false, false, stepSize)
+  step(10)
+  poke(dut.ioTL.d.valid, 1)
+  poke(dut.ioTL.d.bits.opcode, 1)
+  poke(dut.ioTL.d.bits.source, 1)
+  poke(dut.ioTL.d.bits.size, 2)
+  poke(dut.ioTL.d.bits.data, 111)
+  step(1)
+  poke(dut.ioTL.d.valid, 0)
+  step(10)
+  
+  var i = 0
+  while(i < 4) {
+    poke(dut.ioJTAG.jtag.TCK, 1)
+    step(stepSize)
+    poke(dut.ioJTAG.jtag.TCK, 0)
+    step(stepSize)
+    poke(dut.ioJTAG.jtag.TCK, 1)
+    step(stepSize)
+    poke(dut.ioJTAG.jtag.TCK, 0)
+    step(stepSize)
+    poke(dut.ioJTAG.jtag.TCK, 1)
+    step(stepSize)
+    poke(dut.ioJTAG.jtag.TCK, 0)
+    step(stepSize)
+    i += 1
+  }
 
 }
 
