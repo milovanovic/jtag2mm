@@ -75,5 +75,3 @@ Several tests were used to verify the correctness of the module. They are define
 module is used.
 - `scala/jtag2TLPassthroughTester.scala` - test used to verify the TL variant of the module working with another module with memory mapped control registers connected to the TL bus. A custom passthrough module is used.
 - `python/gpio_for_jtag.py` - test used for FPGA hardware verification of the AXI4 variant of the module working with another module with memory mapped control registers connected to the AXI4 bus.
-
-All these test can be run using `testOnly jtag2mm.TestNameSpec` command.
