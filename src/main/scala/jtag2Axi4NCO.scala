@@ -27,6 +27,7 @@ class jtag2Axi4NCO[T <: Data : Real : BinaryRepresentation] (
   initialInstruction: BigInt,
   beatBytes: Int,
   jtagAddresses: AddressSet,
+  maxBurstNum: Int,
   paramsNCO: NCOParams[T],
   csrAddressNCO: AddressSet
 )  extends LazyModule()(Parameters.empty) { 
@@ -57,7 +58,7 @@ class jtag2Axi4NCO[T <: Data : Real : BinaryRepresentation] (
   
   val ncoModule = LazyModule(new AXI4NCOLazyModuleBlock(paramsNCO, AddressSet(0x000000, 0xFF), beatBytes = beatBytes) with AXI4Block)
   
-  val jtagModule = LazyModule(new AXI4JTAGToMasterBlock(irLength, initialInstruction, beatBytes, jtagAddresses))
+  val jtagModule = LazyModule(new AXI4JTAGToMasterBlock(irLength, initialInstruction, beatBytes, jtagAddresses, maxBurstNum))
   
   //ncoModule.mem.get := jtagModule.node.get
   InModuleBody { ncoModule.ioMem.get <> jtagModule.ioAXI4 }
@@ -105,7 +106,7 @@ object JTAGToAxi4NCOApp extends App
     val beatBytes = 4
   
   implicit val p: Parameters = Parameters.empty
-  val jtagModule = LazyModule(new jtag2Axi4NCO(3, BigInt("0", 2), 4, AddressSet(0x00000, 0x3FFF), paramsNCO, AddressSet(0x0000, 0x00FF)))
+  val jtagModule = LazyModule(new jtag2Axi4NCO(3, BigInt("0", 2), 4, AddressSet(0x00000, 0x3FFF), 8, paramsNCO, AddressSet(0x0000, 0x00FF)))
   
   chisel3.Driver.execute(args, ()=> jtagModule.module)
 }

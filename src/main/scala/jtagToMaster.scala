@@ -26,6 +26,7 @@ class JtagToMasterControllerIO(irLength: Int, beatBytes: Int) extends JtagBlockI
   val dataIn = Input(UInt((beatBytes*8).W))
   val validIn = Input(Bool())
   val receivedIn = Output(Bool())
+  val receivedEnd = Output(Bool())
 }
 
 class topModuleIO extends Bundle {
@@ -35,7 +36,7 @@ class topModuleIO extends Bundle {
 
 
 class JtagController(irLength: Int, initialInstruction: BigInt, beatBytes: Int) extends Module {
-  require(irLength >= 2)
+  require(irLength >= 3)
 
   val io = IO(new JtagToMasterControllerIO(irLength, beatBytes))
   
@@ -110,7 +111,8 @@ class JtagController(irLength: Int, initialInstruction: BigInt, beatBytes: Int) 
   when(io.validIn) {dataInReg := io.dataIn}
   val counterTDO = RegInit(UInt(7.W), 0.U)
   when(RegNext(io.validIn)) {io.receivedIn := true.B} .otherwise {io.receivedIn := false.B}
-  when(io.validIn) {indicator := true.B} .elsewhen(counterTDO === (8*beatBytes-1).U) {indicator := false.B}
+  when(RegNext(RegNext(indicator)) && !RegNext(indicator)) {io.receivedEnd := true.B} .otherwise {io.receivedEnd := false.B}
+  when(io.validIn && !RegNext(io.validIn)) {indicator := true.B} .elsewhen(counterTDO === (8*beatBytes-1).U) {indicator := false.B}
   when(indicator) {counterTDO := counterTDO + 1.U} .otherwise {counterTDO := 0.U}
   
   when(indicator) {
@@ -395,7 +397,7 @@ class TLJTAGToMasterBlock(irLength: Int = 3, initialInstruction: BigInt = BigInt
 }
 
 
-class JTAGToMasterAXI4(irLength: Int, initialInstruction: BigInt, beatBytes: Int, address: AddressSet)  extends LazyModule()(Parameters.empty) {
+class JTAGToMasterAXI4(irLength: Int, initialInstruction: BigInt, beatBytes: Int, address: AddressSet, burstMaxNum: Int)  extends LazyModule()(Parameters.empty) {
   
   val node = Some(AXI4MasterNode(Seq(AXI4MasterPortParameters(Seq(AXI4MasterParameters("ioAXI4"))))))
 
@@ -420,7 +422,7 @@ class JTAGToMasterAXI4(irLength: Int, initialInstruction: BigInt, beatBytes: Int
     controller.io.dataIn := DontCare
     
     object State extends ChiselEnum {
-      val sIdle, sSetDataAndAddress, sResetCounterW, sSetReadyB, sSetReadAddress, sResetCounterR, sSetReadyR, sDataForward = Value
+      val sIdle, sSetDataAndAddress, sResetCounterW, sSetReadyB, sSetReadAddress, sResetCounterR, sSetReadyR, sDataForward, sSetDataAndAddressBurst, sResetCounterWBurst, sSetReadyBBurst, sSetReadAddressBurst, sResetCounterRBurst, sSetReadyRBurst, sDataForwardBurst, sDataForward2Burst  = Value
     }
     val state = RegInit(State.sIdle)
     
@@ -430,34 +432,67 @@ class JTAGToMasterAXI4(irLength: Int, initialInstruction: BigInt, beatBytes: Int
     val dataValue = RegInit(UInt((beatBytes * 8).W), 0.U)
     val addressValue = RegInit(UInt((beatBytes * 4).W), 0.U)
     
-    when (currentInstruction === "b011".U) {
+    val burstTotalNumber = RegInit(UInt(8.W), 0.U)
+    val burstCurrentNumber = RegInit(UInt(8.W), 0.U)
+    val dataValueBurst = RegInit(VecInit(Seq.fill(burstMaxNum)(0.U((beatBytes * 8).W))))//(0.asTypeOf(UInt((beatBytes * 8).W)))))
+    
+    when (currentInstruction === "b0011".U) {
       dataValue := controller.io.dataOut
     }
     
-    when (currentInstruction === "b010".U) {
+    when (currentInstruction === "b0010".U) {
       addressValue := controller.io.dataOut >> (beatBytes * 4)
     }
     
+    when (currentInstruction === "b1000".U) {
+      burstTotalNumber := controller.io.dataOut >> ((beatBytes-1) * 8)
+    }
+    
+    when (currentInstruction === "b1010".U) {
+      burstCurrentNumber := controller.io.dataOut >> ((beatBytes-1) * 8)
+    }
+    
+    when (currentInstruction === "b1011".U) {
+      dataValueBurst(burstCurrentNumber) := controller.io.dataOut
+    }
+    
     val shouldWrite = RegInit(Bool(), false.B)
-    when ((currentInstruction === "b001".U) && (RegNext(currentInstruction)=/= "b001".U)) {
+    when ((currentInstruction === "b0001".U) && (RegNext(currentInstruction)=/= "b0001".U)) {
       shouldWrite := true.B
     } .elsewhen(state === State.sSetDataAndAddress) {
       shouldWrite := false.B
     }
     
     val shouldRead = RegInit(Bool(), false.B)
-    when ((currentInstruction === "b100".U) && (RegNext(currentInstruction)=/= "b100".U)) {
+    when ((currentInstruction === "b0100".U) && (RegNext(currentInstruction)=/= "b0100".U)) {
       shouldRead := true.B
     } .elsewhen(state === State.sSetReadAddress) {
       shouldRead := false.B
     }
     
+    val shouldWriteBurst = RegInit(Bool(), false.B)
+    when ((currentInstruction === "b1001".U) && (RegNext(currentInstruction)=/= "b1001".U) && (burstTotalNumber > 0.U)) {
+      shouldWriteBurst := true.B
+    } .elsewhen(state === State.sSetDataAndAddressBurst) {
+      shouldWriteBurst := false.B
+    }
+    
+    val shouldReadBurst = RegInit(Bool(), false.B)
+    when ((currentInstruction === "b1100".U) && (RegNext(currentInstruction)=/= "b1100".U) && (burstTotalNumber > 0.U)) {
+      shouldReadBurst := true.B
+    } .elsewhen(state === State.sSetReadAddressBurst) {
+      shouldReadBurst := false.B
+    }
+    
     val readData = RegInit(UInt((beatBytes * 8).W), 0.U)
+    val received = RegInit(Bool(), false.B)
     
     val dataSize = if (beatBytes == 4) 2 else 3
     
     def maxWait = 500
     val counter = RegInit(UInt(9.W), 0.U)
+    
+    val burstCounter = RegInit(UInt(8.W), 0.U)
     
     switch (state) {
       is (State.sIdle) {
@@ -465,7 +500,12 @@ class JTAGToMasterAXI4(irLength: Int, initialInstruction: BigInt, beatBytes: Int
           state := State.sSetDataAndAddress
         } .elsewhen (shouldRead) {
           state := State.sSetReadAddress
+        } .elsewhen (shouldWriteBurst) {
+          state := State.sSetDataAndAddressBurst
+        } .elsewhen (shouldReadBurst) {
+          state := State.sSetReadAddressBurst
         }
+        
         ioNode.aw.valid := false.B
         ioNode.w.valid := false.B
         ioNode.b.ready := false.B
@@ -483,6 +523,8 @@ class JTAGToMasterAXI4(irLength: Int, initialInstruction: BigInt, beatBytes: Int
         controller.io.dataIn := 0.U
         
         counter := 0.U
+        burstCounter := 0.U
+        received := false.B
       }
       is (State.sSetDataAndAddress) {
         when (ioNode.w.ready && ioNode.aw.ready) {
@@ -583,11 +625,132 @@ class JTAGToMasterAXI4(irLength: Int, initialInstruction: BigInt, beatBytes: Int
         counter := counter + 1.U
       }
       is (State.sDataForward) {
-        when (controller.io.receivedIn) {
+        when (controller.io.receivedEnd) {
           state := State.sIdle
         }
         controller.io.dataIn := readData
         controller.io.validIn := true.B
+      }
+      
+      is (State.sSetDataAndAddressBurst) {
+        when (ioNode.w.ready && ioNode.aw.ready) {
+          state := State.sResetCounterWBurst
+        } .elsewhen(counter >= maxWait.U) {
+          state := State.sIdle
+        }
+        ioNode.aw.valid := true.B
+        ioNode.w.valid := true.B
+        ioNode.b.ready := false.B
+        
+        ioNode.aw.bits.addr := addressValue + burstCounter*beatBytes.U
+        ioNode.aw.bits.size := dataSize.U
+        ioNode.w.bits.data := dataValueBurst(burstCounter)
+        ioNode.w.bits.last := true.B
+        ioNode.w.bits.strb := 255.U
+        
+        controller.io.validIn := false.B
+        controller.io.dataIn := 0.U
+        
+        counter := counter + 1.U
+      }
+      is (State.sResetCounterWBurst) {
+        state := State.sSetReadyBBurst
+        
+        ioNode.aw.valid := false.B
+        ioNode.w.valid := false.B
+        ioNode.b.ready := false.B
+        
+        controller.io.validIn := false.B
+        controller.io.dataIn := 0.U
+        
+        counter := 0.U
+        burstCounter := burstCounter + 1.U
+      }
+      is (State.sSetReadyBBurst) {
+        when (ioNode.b.valid && (ioNode.b.bits.resp === 0.U) && (ioNode.b.bits.id === ioNode.aw.bits.id) && (burstCounter >= burstTotalNumber)) {
+          state := State.sIdle
+        } .elsewhen(counter >= maxWait.U) {
+          state := State.sIdle
+        } .elsewhen (ioNode.b.valid && (ioNode.b.bits.resp === 0.U) && (ioNode.b.bits.id === ioNode.aw.bits.id) && (burstCounter < burstTotalNumber)) {
+          state := State.sSetDataAndAddressBurst
+        }
+        ioNode.aw.valid := false.B
+        ioNode.w.valid := false.B
+        ioNode.b.ready := true.B
+        
+        ioNode.aw.bits.addr := 0.U
+        ioNode.aw.bits.size := dataSize.U
+        ioNode.w.bits.data := 0.U
+        ioNode.w.bits.last := false.B
+        ioNode.w.bits.strb := 255.U
+        
+        controller.io.validIn := false.B
+        controller.io.dataIn := 0.U
+        
+        counter := counter + 1.U
+      }
+      is (State.sSetReadAddressBurst) {
+        when (ioNode.ar.ready) {
+          state := State.sResetCounterRBurst
+        } .elsewhen(counter >= maxWait.U) {
+          state := State.sIdle
+        }
+        ioNode.ar.valid := true.B
+        ioNode.r.ready := false.B
+        
+        ioNode.ar.bits.addr := addressValue + burstCounter*beatBytes.U
+        ioNode.ar.bits.size := dataSize.U
+        
+        controller.io.validIn := false.B
+        controller.io.dataIn := 0.U
+        
+        counter := counter + 1.U
+        received := false.B
+      }
+      is (State.sResetCounterRBurst) {
+        state := State.sSetReadyRBurst
+        
+        ioNode.ar.valid := false.B
+        ioNode.r.ready := false.B
+        
+        controller.io.validIn := false.B
+        controller.io.dataIn := 0.U
+        
+        counter := 0.U
+        burstCounter := burstCounter + 1.U
+      }
+      is (State.sSetReadyRBurst) {
+        when (ioNode.r.valid && (ioNode.r.bits.resp === 0.U) && (ioNode.r.bits.id === ioNode.ar.bits.id)) {
+          state := State.sDataForwardBurst
+        } .elsewhen(counter >= maxWait.U) {
+          state := State.sIdle
+        }
+        ioNode.ar.valid := false.B
+        ioNode.r.ready := true.B
+        
+        readData := ioNode.r.bits.data
+        
+        controller.io.validIn := false.B
+        controller.io.dataIn := 0.U
+        
+        counter := counter + 1.U
+      }
+      is (State.sDataForwardBurst) {
+        when (controller.io.receivedIn) {
+          state := State.sDataForward2Burst
+        }
+        controller.io.dataIn := readData
+        controller.io.validIn := true.B
+      }
+      is (State.sDataForward2Burst) {
+        when (!(controller.io.receivedEnd) && received && (burstCounter >= burstTotalNumber)) {
+          state := State.sIdle
+        } .elsewhen (!(controller.io.receivedEnd) && received && (burstCounter < burstTotalNumber)) {
+          state := State.sSetReadAddressBurst
+        }
+        when (controller.io.receivedEnd) {received := true.B}
+        controller.io.dataIn := readData
+        controller.io.validIn := false.B
       }
     }
 
@@ -595,7 +758,8 @@ class JTAGToMasterAXI4(irLength: Int, initialInstruction: BigInt, beatBytes: Int
 }
 
 
-class AXI4JTAGToMasterBlock(irLength: Int = 3, initialInstruction: BigInt = BigInt("0", 2), beatBytes: Int = 4, addresses: AddressSet)(implicit p: Parameters) extends JTAGToMasterAXI4(irLength, initialInstruction, beatBytes, addresses) {
+class AXI4JTAGToMasterBlock(irLength: Int = 4, initialInstruction: BigInt = BigInt("0", 2), beatBytes: Int = 4, addresses: AddressSet, burstMaxNum: Int = 8)(implicit p: Parameters) extends JTAGToMasterAXI4(irLength, initialInstruction, beatBytes, addresses, burstMaxNum) {
+  require(burstMaxNum <= 128)
   
   def makeIO2(): topModuleIO = {
     val io2: topModuleIO = IO(io.cloneType)
@@ -633,7 +797,7 @@ object JTAGToMasterDspBlockTL extends App
 object JTAGToMasterDspBlockAXI4 extends App
 {
   implicit val p: Parameters = Parameters.empty
-  val jtagModule = LazyModule(new AXI4JTAGToMasterBlock(3, BigInt("0", 2), 4, AddressSet(0x00000, 0x3FFF)))
+  val jtagModule = LazyModule(new AXI4JTAGToMasterBlock(3, BigInt("0", 2), 4, AddressSet(0x00000, 0x3FFF), 8))
   
   chisel3.Driver.execute(args, ()=> jtagModule.module)
 }
