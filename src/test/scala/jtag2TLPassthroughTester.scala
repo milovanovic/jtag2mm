@@ -113,22 +113,39 @@ class jtag2TLPassthroughTester(dut: jtag2TLPassthrough) extends PeekPokeTester(d
   poke(dut.outStream.ready, 1)
   
   jtagReset(stepSize)
-  jtagSend(BigInt("010", 2), 3, false, true, stepSize)
-  jtagSend(BigInt("0"*16, 2), 16, true, false, stepSize)
-  jtagSend(BigInt("011", 2), 3, false, false, stepSize)
+  jtagSend(BigInt("0010", 2), 4, false, true, stepSize)
+  jtagSend(BigInt("0"*32, 2), 32, true, false, stepSize)
+  jtagSend(BigInt("0011", 2), 4, false, false, stepSize)
   jtagSend(BigInt("0"*56 ++ "00001000", 2), 64, true, false, stepSize)
-  jtagSend(BigInt("001", 2), 3, false, false, stepSize)
+  jtagSend(BigInt("0001", 2), 4, false, false, stepSize)
   
   step(100)
   
   poke(dut.outStream.ready, 0)
   
-  jtagReset(stepSize)
-  jtagSend(BigInt("010", 2), 3, false, true, stepSize)
-  jtagSend(BigInt("0"*16, 2), 16, true, false, stepSize)
-  jtagSend(BigInt("011", 2), 3, false, false, stepSize)
+  /*jtagReset(stepSize)
+  jtagSend(BigInt("0010", 2), 4, false, true, stepSize)
+  jtagSend(BigInt("0"*32, 2), 32, true, false, stepSize)
+  jtagSend(BigInt("0011", 2), 4, false, false, stepSize)
   jtagSend(BigInt("0"*56 ++ "00011000", 2), 64, true, false, stepSize)
-  jtagSend(BigInt("001", 2), 3, false, false, stepSize)
+  jtagSend(BigInt("0001", 2), 4, false, false, stepSize)*/
+  
+  jtagSend(BigInt("0010", 2), 4, false, false, stepSize)
+  jtagSend(BigInt("0"*24 ++ "00001000", 2), 32, true, false, stepSize)
+  jtagSend(BigInt("1000", 2), 4, false, false, stepSize)
+  jtagSend(BigInt("0"*6 ++ "10", 2), 8, true, false, stepSize)
+  
+  jtagSend(BigInt("1010", 2), 4, false, false, stepSize)
+  jtagSend(BigInt("0"*6 ++ "00", 2), 8, true, false, stepSize)
+  jtagSend(BigInt("1011", 2), 4, false, false, stepSize)
+  jtagSend(BigInt("0"*56 ++ "00011000", 2), 64, true, false, stepSize)
+  
+  jtagSend(BigInt("1010", 2), 4, false, false, stepSize)
+  jtagSend(BigInt("0"*6 ++ "01", 2), 8, true, false, stepSize)
+  jtagSend(BigInt("1011", 2), 4, false, false, stepSize)
+  jtagSend(BigInt("0"*56 ++ "00000000", 2), 64, true, false, stepSize)
+  
+  jtagSend(BigInt("1001", 2), 4, false, false, stepSize)
   
   
   poke(dut.ioJTAG.jtag.TCK, 0)
@@ -146,7 +163,7 @@ class jtag2TLPassthroughTester(dut: jtag2TLPassthrough) extends PeekPokeTester(d
   poke(dut.ioJTAG.jtag.TCK, 0)
   step(stepSize)
   
-  jtagSend(BigInt("100", 2), 3, false, false, stepSize)
+  jtagSend(BigInt("0100", 2), 4, false, false, stepSize)
   
   var i = 0
   while(i < 32) {
@@ -167,6 +184,30 @@ class jtag2TLPassthroughTester(dut: jtag2TLPassthrough) extends PeekPokeTester(d
   
   poke(dut.outStream.ready, 1)
   
+  
+  jtagSend(BigInt("0010", 2), 4, false, false, stepSize)
+  jtagSend(BigInt("0"*32, 2), 32, true, false, stepSize)
+  jtagSend(BigInt("1000", 2), 4, false, false, stepSize)
+  jtagSend(BigInt("0"*6 ++ "11", 2), 8, true, false, stepSize)
+  
+  jtagSend(BigInt("1100", 2), 4, false, false, stepSize)
+  i = 0
+  while(i < 32 * 4) {
+    poke(dut.ioJTAG.jtag.TCK, 1)
+    step(stepSize)
+    poke(dut.ioJTAG.jtag.TCK, 0)
+    step(stepSize)
+    poke(dut.ioJTAG.jtag.TCK, 1)
+    step(stepSize)
+    poke(dut.ioJTAG.jtag.TCK, 0)
+    step(stepSize)
+    poke(dut.ioJTAG.jtag.TCK, 1)
+    step(stepSize)
+    poke(dut.ioJTAG.jtag.TCK, 0)
+    step(stepSize)
+    i += 1
+  }
+  
   step(300)
 
 }
@@ -177,13 +218,14 @@ class jtag2TLPassthroughSpec extends FlatSpec with Matchers {
   
   
   val params = PassthroughParams(depth = 0)
-  val irLength = 3
+  val irLength = 4
   val initialInstruction = BigInt("0", 2)
   val addresses = AddressSet(0x00000, 0xFFFF)
   val beatBytes = 8
+  val maxBurstNum = 8
   
   it should "Test JTAG To TL Passthrough" in {
-    val lazyDut = LazyModule(new jtag2TLPassthrough(irLength, initialInstruction, beatBytes, addresses, params) {})
+    val lazyDut = LazyModule(new jtag2TLPassthrough(irLength, initialInstruction, beatBytes, addresses, maxBurstNum, params) {})
 
     chisel3.iotesters.Driver.execute(Array("-tiwv", "-tbn", "verilator", "-tivsuv"), () => lazyDut.module) {
       c => new jtag2TLPassthroughTester(lazyDut)

@@ -126,7 +126,7 @@ class JtagController(irLength: Int, initialInstruction: BigInt, beatBytes: Int) 
 }
 
 
-class JTAGToMasterTL[D, U, E, O, B <: Data](irLength: Int, initialInstruction: BigInt, beatBytes: Int)  extends LazyModule()(Parameters.empty) {
+class JTAGToMasterTL[D, U, E, O, B <: Data](irLength: Int, initialInstruction: BigInt, beatBytes: Int, burstMaxNum: Int)  extends LazyModule()(Parameters.empty) {
   
   val node = Some(TLClientNode(Seq(TLClientPortParameters(Seq(TLClientParameters(name="JTAGToMasterOut", sourceId = IdRange(0, 4)))))))
 
@@ -153,7 +153,7 @@ class JTAGToMasterTL[D, U, E, O, B <: Data](irLength: Int, initialInstruction: B
     controller.io.dataIn := DontCare
     
     object State extends ChiselEnum {
-      val sIdle, sSetDataA, sResetValidA, sSetReadyD, sReceiveDataD, sSetReadAddress, sReadData, sDataForward = Value
+      val sIdle, sSetDataA, sSetReadAddress, sDataForward, sSetDataABurst, sIncrementWriteBurst, sSetReadAddressBurst, sIncrementReadBurst, sDataForwardBurst, sDataForward2Burst = Value
     }
     val state = RegInit(State.sIdle)
     
@@ -163,12 +163,28 @@ class JTAGToMasterTL[D, U, E, O, B <: Data](irLength: Int, initialInstruction: B
     val dataValue = RegInit(UInt((beatBytes * 8).W), 0.U)
     val addressValue = RegInit(UInt((beatBytes * 4).W), 0.U)
     
-    when (currentInstruction === "b011".U) {
+    val burstTotalNumber = RegInit(UInt(8.W), 0.U)
+    val burstCurrentNumber = RegInit(UInt(8.W), 0.U)
+    val dataValueBurst = RegInit(VecInit(Seq.fill(burstMaxNum)(0.U((beatBytes * 8).W))))
+    
+    when (currentInstruction === "b0011".U) {
       dataValue := controller.io.dataOut
     }
     
-    when (currentInstruction === "b010".U) {
+    when (currentInstruction === "b0010".U) {
       addressValue := controller.io.dataOut >> (beatBytes * 4)
+    }
+    
+    when (currentInstruction === "b1000".U) {
+      burstTotalNumber := controller.io.dataOut >> ((beatBytes-1) * 8)
+    }
+    
+    when (currentInstruction === "b1010".U) {
+      burstCurrentNumber := controller.io.dataOut >> ((beatBytes-1) * 8)
+    }
+    
+    when (currentInstruction === "b1011".U) {
+      dataValueBurst(burstCurrentNumber) := controller.io.dataOut
     }
     
     val shouldWrite = RegInit(Bool(), false.B)
@@ -185,7 +201,24 @@ class JTAGToMasterTL[D, U, E, O, B <: Data](irLength: Int, initialInstruction: B
       shouldRead := false.B
     }
     
+    val shouldWriteBurst = RegInit(Bool(), false.B)
+    when ((currentInstruction === "b1001".U) && (RegNext(currentInstruction)=/= "b1001".U) && (burstTotalNumber > 0.U)) {
+      shouldWriteBurst := true.B
+    } .elsewhen(state === State.sSetDataABurst) {
+      shouldWriteBurst := false.B
+    }
+    
+    val shouldReadBurst = RegInit(Bool(), false.B)
+    when ((currentInstruction === "b1100".U) && (RegNext(currentInstruction)=/= "b1100".U) && (burstTotalNumber > 0.U)) {
+      shouldReadBurst := true.B
+    } .elsewhen(state === State.sSetReadAddressBurst) {
+      shouldReadBurst := false.B
+    }
+    
     val readData = RegInit(UInt((beatBytes * 8).W), 0.U)
+    val received = RegInit(Bool(), false.B)
+    
+    val burstCounter = RegInit(UInt(8.W), 0.U)
     
     val size = if (beatBytes == 4) 2 else 3
     
@@ -195,6 +228,10 @@ class JTAGToMasterTL[D, U, E, O, B <: Data](irLength: Int, initialInstruction: B
           state := State.sSetDataA
         } .elsewhen (shouldRead) {
           state := State.sSetReadAddress
+        } .elsewhen (shouldWriteBurst) {
+          state := State.sSetDataABurst
+        } .elsewhen (shouldReadBurst) {
+          state := State.sSetReadAddressBurst
         }
         
         tl.d.ready := false.B
@@ -210,17 +247,15 @@ class JTAGToMasterTL[D, U, E, O, B <: Data](irLength: Int, initialInstruction: B
         
         controller.io.validIn := false.B
         controller.io.dataIn := 0.U
+        
+        burstCounter := 0.U
+        received := false.B
       }
       is (State.sSetDataA) {
-        //when (tl.a.ready) {
-          //state := State.sResetValidA
-        //when (!tl.a.ready) {
-          //state := State.sSetReadyD
         when (tl.d.valid) {
           state := State.sIdle
         }
         
-        //tl.d.ready := false.B
         tl.d.ready := true.B
         tl.a.valid := true.B
         
@@ -235,68 +270,11 @@ class JTAGToMasterTL[D, U, E, O, B <: Data](irLength: Int, initialInstruction: B
         controller.io.validIn := false.B
         controller.io.dataIn := 0.U
       }
-      is (State.sResetValidA) {
-        state := State.sSetReadyD
-        
-        tl.d.ready := false.B
-        tl.a.valid := false.B
-        
-        tl.a.bits.opcode := 0.U
-        tl.a.bits.param := 0.U
-        tl.a.bits.size := size.U
-        tl.a.bits.source := 0.U
-        tl.a.bits.address := 0.U
-        tl.a.bits.mask := 255.U
-        tl.a.bits.data := 0.U
-        
-        controller.io.validIn := false.B
-        controller.io.dataIn := 0.U
-      }
-      is (State.sSetReadyD) {
-        when (tl.d.valid) {
-          //state := State.sReceiveDataD
-          state := State.sIdle
-        }
-        
-        tl.d.ready := true.B
-        tl.a.valid := false.B
-        
-        tl.a.bits.opcode := 0.U
-        tl.a.bits.param := 0.U
-        tl.a.bits.size := size.U
-        tl.a.bits.source := 0.U
-        tl.a.bits.address := 0.U
-        tl.a.bits.mask := 255.U
-        tl.a.bits.data := 0.U
-        
-        controller.io.validIn := false.B
-        controller.io.dataIn := 0.U
-      }
-      is (State.sReceiveDataD) {
-        state := State.sIdle
-        
-        tl.d.ready := false.B
-        tl.a.valid := false.B
-        
-        tl.a.bits.opcode := 0.U
-        tl.a.bits.param := 0.U
-        tl.a.bits.size := size.U
-        tl.a.bits.source := 0.U
-        tl.a.bits.address := 0.U
-        tl.a.bits.mask := 255.U
-        tl.a.bits.data := 0.U
-        
-        controller.io.validIn := false.B
-        controller.io.dataIn := 0.U
-      }
       is (State.sSetReadAddress) {
-        //when (tl.a.ready) {
-          //state := State.sReadData
         when (tl.d.valid) {
           state := State.sDataForward
         }
         
-        //tl.d.ready := false.B
         tl.d.ready := true.B
         tl.a.valid := true.B
         
@@ -305,27 +283,6 @@ class JTAGToMasterTL[D, U, E, O, B <: Data](irLength: Int, initialInstruction: B
         tl.a.bits.size := size.U
         tl.a.bits.source := 0.U
         tl.a.bits.address := addressValue
-        tl.a.bits.mask := 255.U
-        tl.a.bits.data := 0.U
-        
-        readData := tl.d.bits.data
-        
-        controller.io.validIn := false.B
-        controller.io.dataIn := 0.U
-      }
-      is (State.sReadData) {
-        when (tl.d.valid) {
-          state := State.sDataForward
-        }
-        
-        tl.d.ready := true.B
-        tl.a.valid := false.B
-        
-        tl.a.bits.opcode := 0.U
-        tl.a.bits.param := 0.U
-        tl.a.bits.size := size.U
-        tl.a.bits.source := 0.U
-        tl.a.bits.address := 0.U
         tl.a.bits.mask := 255.U
         tl.a.bits.data := 0.U
         
@@ -353,13 +310,126 @@ class JTAGToMasterTL[D, U, E, O, B <: Data](irLength: Int, initialInstruction: B
         controller.io.validIn := true.B
         controller.io.dataIn := readData
       }
+      
+      is (State.sSetDataABurst) {
+        when (tl.d.valid) {
+          state := State.sIncrementWriteBurst
+        }
+        
+        tl.d.ready := true.B
+        tl.a.valid := true.B
+        
+        tl.a.bits.opcode := 0.U
+        tl.a.bits.param := 0.U
+        tl.a.bits.size := size.U
+        tl.a.bits.source := 0.U
+        tl.a.bits.address := addressValue + beatBytes.U * burstCounter
+        tl.a.bits.mask := 255.U
+        tl.a.bits.data := dataValueBurst(burstCounter)
+        
+        controller.io.validIn := false.B
+        controller.io.dataIn := 0.U
+      }
+      is (State.sIncrementWriteBurst) {
+        when (burstCounter < (burstTotalNumber-1.U)) {
+          state := State.sSetDataABurst
+        } .otherwise {
+          state := State.sIdle
+        }
+        tl.d.ready := false.B
+        tl.a.valid := false.B
+        
+        tl.a.bits.opcode := 0.U
+        tl.a.bits.param := 0.U
+        tl.a.bits.size := size.U
+        tl.a.bits.source := 0.U
+        tl.a.bits.address := 0.U
+        tl.a.bits.mask := 255.U
+        tl.a.bits.data := 0.U
+        
+        controller.io.validIn := false.B
+        controller.io.dataIn := 0.U
+        
+        burstCounter := burstCounter + 1.U
+      }
+      is (State.sSetReadAddressBurst) {
+        when (tl.d.valid) {
+          state := State.sIncrementReadBurst
+        }
+        
+        tl.d.ready := true.B
+        tl.a.valid := true.B
+        
+        tl.a.bits.opcode := 4.U
+        tl.a.bits.param := 0.U
+        tl.a.bits.size := size.U
+        tl.a.bits.source := 0.U
+        tl.a.bits.address := addressValue + beatBytes.U * burstCounter
+        tl.a.bits.mask := 255.U
+        tl.a.bits.data := 0.U
+        
+        readData := tl.d.bits.data
+        received := false.B
+        
+        controller.io.validIn := false.B
+        controller.io.dataIn := 0.U
+      }
+      is (State.sIncrementReadBurst) {
+        state := State.sDataForwardBurst
+        
+        tl.d.ready := false.B
+        tl.a.valid := false.B
+        
+        tl.a.bits.opcode := 4.U
+        tl.a.bits.param := 0.U
+        tl.a.bits.size := size.U
+        tl.a.bits.source := 0.U
+        tl.a.bits.address := 0.U
+        tl.a.bits.mask := 255.U
+        tl.a.bits.data := 0.U
+        
+        //readData := tl.d.bits.data
+        
+        controller.io.validIn := false.B
+        controller.io.dataIn := 0.U
+        burstCounter := burstCounter + 1.U
+      }
+      is (State.sDataForwardBurst) {
+        when (controller.io.receivedIn) {
+          state := State.sDataForward2Burst
+        }
+        
+        tl.d.ready := false.B
+        tl.a.valid := false.B
+        
+        tl.a.bits.opcode := 0.U
+        tl.a.bits.param := 0.U
+        tl.a.bits.size := size.U
+        tl.a.bits.source := 0.U
+        tl.a.bits.address := 0.U
+        tl.a.bits.mask := 255.U
+        tl.a.bits.data := 0.U
+        
+        controller.io.validIn := true.B
+        controller.io.dataIn := readData
+      }
+      is (State.sDataForward2Burst) {
+        when (!(controller.io.receivedEnd) && received && (burstCounter >= burstTotalNumber)) {
+          state := State.sIdle
+        } .elsewhen (!(controller.io.receivedEnd) && received && (burstCounter < burstTotalNumber)) {
+          state := State.sSetReadAddressBurst
+        }
+        when (controller.io.receivedEnd) {received := true.B}
+        controller.io.dataIn := readData
+        controller.io.validIn := false.B
+      }
     }
 
   }
 }
 
 
-class TLJTAGToMasterBlock(irLength: Int = 3, initialInstruction: BigInt = BigInt("0", 2), beatBytes: Int = 4, addresses: AddressSet)(implicit p: Parameters) extends JTAGToMasterTL[TLClientPortParameters, TLManagerPortParameters, TLEdgeOut, TLEdgeIn, TLBundle](irLength, initialInstruction, beatBytes) {
+class TLJTAGToMasterBlock(irLength: Int = 4, initialInstruction: BigInt = BigInt("0", 2), beatBytes: Int = 4, addresses: AddressSet, burstMaxNum: Int = 8)(implicit p: Parameters) extends JTAGToMasterTL[TLClientPortParameters, TLManagerPortParameters, TLEdgeOut, TLEdgeIn, TLBundle](irLength, initialInstruction, beatBytes, burstMaxNum) {
   val devname = "TLJTAGToMasterBlock"
   val devcompat = Seq("jtagToMaster", "radardsp")
   val device = new SimpleDevice(devname, devcompat) {
@@ -789,7 +859,7 @@ class AXI4JTAGToMasterBlock(irLength: Int = 4, initialInstruction: BigInt = BigI
 object JTAGToMasterDspBlockTL extends App
 {
   implicit val p: Parameters = Parameters.empty
-  val jtagModule = LazyModule(new TLJTAGToMasterBlock(3, BigInt("0", 2), 4, AddressSet(0x00000, 0x3FFF)))
+  val jtagModule = LazyModule(new TLJTAGToMasterBlock(3, BigInt("0", 2), 4, AddressSet(0x00000, 0x3FFF), 8))
   
   chisel3.Driver.execute(args, ()=> jtagModule.module)
 }

@@ -65,8 +65,12 @@ abstract class Passthrough2[D, U, EO, EI, B <: Data](val params: PassthroughPara
     //val out = streamNode.out(0)._1
     
     val depth = RegInit(UInt(64.W), params.depth.U)
+    val depth2 = RegInit(UInt(64.W), params.depth.U)
+    val whichOne = RegInit(Bool(), true.B)
     
-    regmap(0x0 -> Seq(RegField(64, depth)))
+    regmap(0x00 -> Seq(RegField(64, depth)),
+          0x08 -> Seq(RegField(64, depth2)),
+          0x10 -> Seq(RegField(1, whichOne)))
     
     //out.head <> Queue(in.head, params.depth)
     
@@ -80,7 +84,7 @@ abstract class Passthrough2[D, U, EO, EI, B <: Data](val params: PassthroughPara
     /*out.head.valid := ShiftRegister(ioin.valid, params.depth)
     out.head.bits.data := ShiftRegister(ioin.bits.data, params.depth)
     ioin.ready := out.head.ready*/
-    out.head.bits.data := depth
+    out.head.bits.data := Mux(whichOne, depth, depth2)
     
     //val queue = Module(new Queue(in.cloneType, params.depth))
     //queue.io.enq <> in
@@ -100,6 +104,7 @@ class jtag2TLPassthrough (
   initialInstruction: BigInt,
   beatBytes: Int,
   jtagAddresses: AddressSet,
+  maxBurstNum: Int,
   params: PassthroughParams
 )  extends LazyModule()(Parameters.empty) { 
 
@@ -157,7 +162,7 @@ class jtag2TLPassthrough (
     
   })
   
-  val jtagModule = LazyModule(new TLJTAGToMasterBlock(irLength, initialInstruction, beatBytes, jtagAddresses))
+  val jtagModule = LazyModule(new TLJTAGToMasterBlock(irLength, initialInstruction, beatBytes, jtagAddresses, maxBurstNum))
   
   InModuleBody { passthroughModule.ioMem.get <> jtagModule.ioTL }
 
@@ -194,13 +199,14 @@ object JTAGToTLPassthroughApp extends App
 {
     
     val params = PassthroughParams(depth = 0)
-    val irLength = 3
+    val irLength = 4
     val initialInstruction = BigInt("0", 2)
     val addresses = AddressSet(0x00000, 0x3FFF)
     val beatBytes = 8
+    val maxBurstNum = 8
   
   implicit val p: Parameters = Parameters.empty
-  val jtagModule = LazyModule(new jtag2TLPassthrough(irLength, initialInstruction, beatBytes, addresses, params))
+  val jtagModule = LazyModule(new jtag2TLPassthrough(irLength, initialInstruction, beatBytes, addresses, maxBurstNum, params))
   
   chisel3.Driver.execute(args, ()=> jtagModule.module)
 }
