@@ -41,19 +41,25 @@ AXI4/TL controller is used to initiate transactions and drive signals through an
 
 ![AXI4 FSM state changing diagram](./doc/images/axi4_fsm.png)
 
+Same FSM could be applied for AXI4 burst transfers. Only difference is that after the completed single data transfer, FSM enters `sIdle` state only if the burst transfers counter has counted out. Otherwise, FSM enters `sSetDataAndAddress`/`sSetReadAddress` state to perform another transfer.
+
 TileLink FSM has different protocol signals involved, but works on the same principles as AXI4 FSM. AXI4 and TL controllers, as well as the appropriate FSM, are decsribed inside the `src/main/scala/jtagToMaster.scala` scala file.
 
 ### User manual
 
-Total of four instructions are necessary for the JTAG2MM module to work properly and that is exactly how many instructions are defined. Instruction codes along with their descriptions are:
+Total of four instructions are necessary for the JTAG2MM module to work properly. With additional instructions for performing burst data transfers, total of 9 instructions are defined. Instruction codes along with their descriptions are provided below:
 * `0x01` - write instruction, initiates the AXI4/TL FSM to begin writing acquired data to acquired address
 * `0x02` - address acquire instruction, accepts the serial data as the address for read/write instruction
 * `0x03` - data acquire instruction, accepts the serial data as the data for read/write instruction
 * `0x04` - read instruction, initiates the AXI4/TL FSM to begin reading data from the acquired address
+* `0x08` - number of burst transactions acquire instruction, accepts the serial data as the number of read/write instructions during one burst transfer cycle
+* `0x09` - burst write instruction, initiates the AXI4/TL FSM to begin acquired number of write transactions. Data is written to consecutive addresses
+* `0x0A` - data index number acquire instruction, accepts the serial data as the index number of data to be acquired for the burst read/write transfer
+* `0x0B` - indexed data acquire instruction, accepts the serial data as the data at the acquired index number for the burst read/write transfer
+* `0x0C` - burst read instruction, initiates the AXI4/TL FSM to begin acquired number of read transactions. Data is read from consecutive addresses
 
-User initiates one of defined instruction by driving the input JTAG signals with appropriate values. `TCK` signal should be driven continuously. Using `TMS` signal, JTAG FSM enters the state in which it accepts the serial data from `TDI` input as the instruction value. Address and data acquire instructions require data values besides address values, so after sending appropriate instruction code, by using `TMS` signal, user should enter the JTAG FSM state in which it accepts the serial data from `TDI` input as the data value. In these instructions, provided data is stored into appropriate registers, so that the write or read instruction can be performed. 
-Before the write instruction, both address acquire and data acquire instructions must be performed. Before the read instruction, address acquire instruction must be performed. Current instruction and data values are being continuously sent from JTAG controller to AXI4/TL controller. When instruction value equals address acquire or data acquire instruction code, obtained data value is stored in either data or address register inside the AXI4/TL controller. When instruction value equals read or write instruction code, that's the indicator for the AXI4/TL controller to start read/write transaction on the interconnect bus. Two read instructions or two write 
-instructions cannot appear sequentially one right after another, there must be at least one other instruction between these two. After performing the read instruction, read data appear on the serial output JTAG `TDO` port.
+User initiates one of defined instruction by driving the input JTAG signals with appropriate values. `TCK` signal should be driven continuously. Using `TMS` signal, JTAG FSM enters the state in which it accepts the serial data from `TDI` input as the instruction value. Address and data acquire instructions, as well as the number of burst transactions acquire, data index number acquire and indexed data acquire instructions, require data values besides address values, so after sending appropriate instruction code, by using `TMS` signal, user should enter the JTAG FSM state in which it accepts the serial data from `TDI` input as the data value. In these instructions, provided data is stored into appropriate registers, so that the write or read instruction can be performed. 
+Before the write instruction, both address acquire and data acquire instructions must be performed. Before the read instruction, address acquire instruction must be performed. For burst write instruction, data for every single transaction must be acquired beforehand, as well as the total number of burst transactions for both burst write and burst read instructions. Current instruction and data values are being continuously sent from JTAG controller to AXI4/TL controller. When instruction value equals one of the acquire instructions code, obtained data value is stored in the appropriate register inside the AXI4/TL controller. When instruction value equals read, write, burst read or burst write instruction code, that's the indicator for the AXI4/TL controller to start (burst) read/write transaction on the interconnect bus. Two read/write/burst read/ burst write instructions of the same type cannot appear sequentially one right after another, there must be at least one other instruction between these two. After performing the read or burst read instruction, read data appear on the serial output JTAG `TDO` port.
 
 ## Tests
 
