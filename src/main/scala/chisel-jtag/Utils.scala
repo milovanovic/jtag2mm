@@ -5,15 +5,13 @@ package jtag
 import chisel3._
 import chisel3.util._
 
-
 // This code was taken from https://github.com/ucb-art/chisel-jtag/blob/master/src/main/scala/jtag/Utils.scala and adjusted to our design needs
-
 
 /** Bundle representing a tristate pin.
   */
 class Tristate extends Bundle {
   val data = Bool()
-  val driven = Bool()  // active high, pin is hi-Z when driven is low
+  val driven = Bool() // active high, pin is hi-Z when driven is low
 }
 
 class NegativeEdgeLatch[T <: Data](dataType: T) extends Module {
@@ -25,7 +23,7 @@ class NegativeEdgeLatch[T <: Data](dataType: T) extends Module {
   val io = IO(new IoClass)
 
   val reg = Reg(dataType)
-  when (io.enable) {
+  when(io.enable) {
     reg := io.next
   }
   io.output := reg
@@ -34,7 +32,7 @@ class NegativeEdgeLatch[T <: Data](dataType: T) extends Module {
 /** Generates a register that updates on the falling edge of the input clock signal.
   */
 object NegativeEdgeLatch {
-  def apply[T <: Data](modClock: Clock, next: T, enable: Bool=true.B): T = {
+  def apply[T <: Data](modClock: Clock, next: T, enable: Bool = true.B): T = {
     // TODO better init passing once in-module multiclock support improves
 
     val latch_module = withClock((!(modClock.asUInt)).asClock) {
@@ -60,12 +58,12 @@ class ClockedCounter(counts: BigInt, init: Option[BigInt]) extends Module {
 
   val count = init match {
     case Some(init) => RegInit(UInt(width.W), init.U)
-    case None => Reg(UInt(width.W))
+    case None       => Reg(UInt(width.W))
   }
 
-  when (count === (counts - 1).asUInt) {
+  when(count === (counts - 1).asUInt) {
     count := 0.U
-  } .otherwise {
+  }.otherwise {
     count := count + 1.U
   }
 
@@ -75,13 +73,13 @@ class ClockedCounter(counts: BigInt, init: Option[BigInt]) extends Module {
 /** Count transitions on the input bit by specifying it as a clock to a counter.
   */
 object ClockedCounter {
-  def apply (data: Bool, counts: BigInt, init: BigInt): UInt = {
+  def apply(data: Bool, counts: BigInt, init: BigInt): UInt = {
     val counter = withClock(data.asClock) {
       Module(new ClockedCounter(counts, Some(init)))
     }
     counter.io.count
   }
-  def apply (data: Bool, counts: BigInt): UInt = {
+  def apply(data: Bool, counts: BigInt): UInt = {
     val counter = withClock(data.asClock) {
       Module(new ClockedCounter(counts, None))
     }

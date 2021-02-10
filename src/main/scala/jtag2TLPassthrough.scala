@@ -20,10 +20,6 @@ import freechips.rocketchip.tilelink._
 
 import jtag._
 
-
-
-
-
 trait TLBasicBlock2 extends TLDspBlock with TLHasCSR {
   def csrAddress = AddressSet(0x0, 0xff)
   def beatBytes = 8
@@ -38,10 +34,8 @@ trait TLBasicBlock2 extends TLDspBlock with TLHasCSR {
   override val mem = Some(TLRegisterNode(address = Seq(csrAddress), device = device, beatBytes = beatBytes))
 }
 
-case class PassthroughParams2
-(
-  depth: Int = 0
-) {
+case class PassthroughParams2(
+  depth: Int = 0) {
   require(depth >= 0, "Passthrough delay must be non-negative")
 }
 
@@ -49,12 +43,14 @@ case object PassthroughDepth extends CSRField {
   override val name = "depth"
 }
 
-abstract class Passthrough2[D, U, EO, EI, B <: Data](val params: PassthroughParams)(implicit p: Parameters) extends DspBlock[D, U, EO, EI, B] with HasCSR {
+abstract class Passthrough2[D, U, EO, EI, B <: Data](val params: PassthroughParams)(implicit p: Parameters)
+    extends DspBlock[D, U, EO, EI, B]
+    with HasCSR {
   //extends DspBlock[D, U, EO, EI, B] with HasCSR {
   val streamNode = AXI4StreamIdentityNode()
   //val inNode = AXI4StreamSlaveNode(AXI4StreamSlaveParameters())
   //val outNode = AXI4StreamMasterNode(Seq(AXI4StreamMasterPortParameters(Seq(AXI4StreamMasterParameters("out", n = 8)))))
-  
+
   lazy val module = new LazyModuleImp(this) {
     val (in, _) = streamNode.in.unzip
     val (out, _) = streamNode.out.unzip
@@ -63,29 +59,27 @@ abstract class Passthrough2[D, U, EO, EI, B <: Data](val params: PassthroughPara
     //val out = outNode.out(0)._1
     //val in = streamNode.in(0)._1
     //val out = streamNode.out(0)._1
-    
+
     val depth = RegInit(UInt(64.W), params.depth.U)
     val depth2 = RegInit(UInt(64.W), params.depth.U)
     val whichOne = RegInit(Bool(), true.B)
-    
-    regmap(0x00 -> Seq(RegField(64, depth)),
-          0x08 -> Seq(RegField(64, depth2)),
-          0x10 -> Seq(RegField(1, whichOne)))
-    
+
+    regmap(0x00 -> Seq(RegField(64, depth)), 0x08 -> Seq(RegField(64, depth2)), 0x10 -> Seq(RegField(1, whichOne)))
+
     //out.head <> Queue(in.head, params.depth)
-    
+
     //val ioHelper = Wire(Queue(in.head, params.depth).cloneType)
     //ioHelper <> Queue(in.head, params.depth)
-    
+
     /*out.head.valid := ShiftRegister(in.head.valid, params.depth)
     out.head.bits.data := ShiftRegister(in.head.bits.data, params.depth)
     in.head.ready := out.head.ready*/
-    
+
     /*out.head.valid := ShiftRegister(ioin.valid, params.depth)
     out.head.bits.data := ShiftRegister(ioin.bits.data, params.depth)
     ioin.ready := out.head.ready*/
     out.head.bits.data := Mux(whichOne, depth, depth2)
-    
+
     //val queue = Module(new Queue(in.cloneType, params.depth))
     //queue.io.enq <> in
     //out <> queue.io.deq
@@ -93,34 +87,31 @@ abstract class Passthrough2[D, U, EO, EI, B <: Data](val params: PassthroughPara
 }
 
 class TLPassthrough2(params: PassthroughParams)(implicit p: Parameters)
-  extends Passthrough2[TLClientPortParameters, TLManagerPortParameters, TLEdgeOut, TLEdgeIn, TLBundle](params)
+    extends Passthrough2[TLClientPortParameters, TLManagerPortParameters, TLEdgeOut, TLEdgeIn, TLBundle](params)
     with TLBasicBlock2
 
-
-
-
-class jtag2TLPassthrough (
-  irLength: Int,
+class jtag2TLPassthrough(
+  irLength:           Int,
   initialInstruction: BigInt,
-  beatBytes: Int,
-  jtagAddresses: AddressSet,
-  maxBurstNum: Int,
-  params: PassthroughParams
-)  extends LazyModule()(Parameters.empty) { 
+  beatBytes:          Int,
+  jtagAddresses:      AddressSet,
+  maxBurstNum:        Int,
+  params:             PassthroughParams)
+    extends LazyModule()(Parameters.empty) {
 
-  
   val passthroughModule = LazyModule(new TLPassthrough2(params) {
-    
+
     def standaloneParams = TLBundleParameters(
-      addressBits = 16, 
+      addressBits = 16,
       dataBits = 64,
       sourceBits = 16,
       sinkBits = 16,
       sizeBits = 3,
       aUserBits = 0,
       dUserBits = 0,
-      hasBCE = false)
-      
+      hasBCE = false
+    )
+
     val clientParams = TLClientParameters(
       name = "BundleBridgeToTL",
       sourceId = IdRange(0, 1),
@@ -134,39 +125,41 @@ class jtag2TLPassthrough (
       supportsPutFull = TransferSizes(1, beatBytes),
       supportsPutPartial = TransferSizes(1, beatBytes),
       supportsHint = TransferSizes(1, beatBytes),
-      userBits = Nil)
-  
-    val ioMem = mem.map { 
-      m => {
+      userBits = Nil
+    )
+
+    val ioMem = mem.map { m =>
+      {
         val ioMemNode = BundleBridgeSource(() => TLBundle(standaloneParams))
         m := BundleBridgeToTL(TLClientPortParameters(Seq(clientParams))) := ioMemNode
         val ioMem = InModuleBody { ioMemNode.makeIO() }
         ioMem
       }
     }
-    
+
     val ioStreamNode = BundleBridgeSink[AXI4StreamBundle]()
-    ioStreamNode := 
-    AXI4StreamToBundleBridge(AXI4StreamSlaveParameters()) := streamNode
+    ioStreamNode :=
+      AXI4StreamToBundleBridge(AXI4StreamSlaveParameters()) := streamNode
     val outStream = InModuleBody { ioStreamNode.makeIO() }
-    
+
     val ioparallelin = BundleBridgeSource(() => new AXI4StreamBundle(AXI4StreamBundleParameters(n = 8)))
     streamNode := BundleBridgeToAXI4Stream(AXI4StreamMasterParameters(n = 8)) := ioparallelin
     //inNode := BundleBridgeToAXI4Stream(AXI4StreamMasterParameters(n = 8)) := ioparallelin
     val inStream2 = InModuleBody { ioparallelin.makeIO() }
-    
+
     /*val ioIn = BundleBridgeSource(() => new AXI4StreamBundle(AXI4StreamBundleParameters(n = 8)))
     inNode := BundleBridgeToAXI4Stream(AXI4StreamMasterParameters(n = 8)) := ioIn
     //inNode := BundleBridgeToAXI4Stream(AXI4StreamMasterParameters(n = 8)) := ioparallelin
     val inStream = InModuleBody { ioIn.makeIO() }*/
-    
+
   })
-  
-  val jtagModule = LazyModule(new TLJTAGToMasterBlock(irLength, initialInstruction, beatBytes, jtagAddresses, maxBurstNum))
-  
+
+  val jtagModule = LazyModule(
+    new TLJTAGToMasterBlock(irLength, initialInstruction, beatBytes, jtagAddresses, maxBurstNum)
+  )
+
   InModuleBody { passthroughModule.ioMem.get <> jtagModule.ioTL }
 
-  
   def makeIO1(): AXI4StreamBundle = {
     val io2: AXI4StreamBundle = IO(passthroughModule.outStream.cloneType)
     io2.suggestName("outStream")
@@ -194,20 +187,19 @@ class jtag2TLPassthrough (
 
 }
 
+object JTAGToTLPassthroughApp extends App {
 
-object JTAGToTLPassthroughApp extends App
-{
-    
-    val params = PassthroughParams(depth = 0)
-    val irLength = 4
-    val initialInstruction = BigInt("0", 2)
-    val addresses = AddressSet(0x00000, 0x3FFF)
-    val beatBytes = 8
-    val maxBurstNum = 8
-  
+  val params = PassthroughParams(depth = 0)
+  val irLength = 4
+  val initialInstruction = BigInt("0", 2)
+  val addresses = AddressSet(0x00000, 0x3fff)
+  val beatBytes = 8
+  val maxBurstNum = 8
+
   implicit val p: Parameters = Parameters.empty
-  val jtagModule = LazyModule(new jtag2TLPassthrough(irLength, initialInstruction, beatBytes, addresses, maxBurstNum, params))
-  
-  chisel3.Driver.execute(args, ()=> jtagModule.module)
-}
+  val jtagModule = LazyModule(
+    new jtag2TLPassthrough(irLength, initialInstruction, beatBytes, addresses, maxBurstNum, params)
+  )
 
+  chisel3.Driver.execute(args, () => jtagModule.module)
+}

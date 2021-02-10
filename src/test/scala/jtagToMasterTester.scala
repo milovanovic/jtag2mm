@@ -24,9 +24,8 @@ import org.scalatest.{FlatSpec, Matchers}
 
 import jtag._
 
-
 class TLJTAGToMasterBlockTester(dut: TLJTAGToMasterBlock) extends PeekPokeTester(dut.module) {
-  
+
   def jtagReset(stepSize: Int = 1) {
     var i = 0
     while (i < 5) {
@@ -38,9 +37,15 @@ class TLJTAGToMasterBlockTester(dut: TLJTAGToMasterBlock) extends PeekPokeTester
       i += 1
     }
   }
-  
-  def jtagSend(data: BigInt, dataLength: Int, data_notInstruction: Boolean = true, state_reset_notIdle: Boolean = true, stepSize: Int = 1) {
-    
+
+  def jtagSend(
+    data:                BigInt,
+    dataLength:          Int,
+    data_notInstruction: Boolean = true,
+    state_reset_notIdle: Boolean = true,
+    stepSize:            Int = 1
+  ) {
+
     if (state_reset_notIdle) {
       poke(dut.ioJTAG.jtag.TCK, 0)
       poke(dut.ioJTAG.jtag.TMS, 0)
@@ -48,13 +53,13 @@ class TLJTAGToMasterBlockTester(dut: TLJTAGToMasterBlock) extends PeekPokeTester
       poke(dut.ioJTAG.jtag.TCK, 1)
       step(stepSize)
     }
-    
+
     poke(dut.ioJTAG.jtag.TCK, 0)
     poke(dut.ioJTAG.jtag.TMS, 1)
     step(stepSize)
     poke(dut.ioJTAG.jtag.TCK, 1)
     step(stepSize)
-    
+
     if (!data_notInstruction) {
       poke(dut.ioJTAG.jtag.TCK, 0)
       poke(dut.ioJTAG.jtag.TMS, 1)
@@ -62,7 +67,7 @@ class TLJTAGToMasterBlockTester(dut: TLJTAGToMasterBlock) extends PeekPokeTester
       poke(dut.ioJTAG.jtag.TCK, 1)
       step(stepSize)
     }
-    
+
     poke(dut.ioJTAG.jtag.TCK, 0)
     poke(dut.ioJTAG.jtag.TMS, 0)
     step(stepSize)
@@ -73,7 +78,7 @@ class TLJTAGToMasterBlockTester(dut: TLJTAGToMasterBlock) extends PeekPokeTester
     step(stepSize)
     poke(dut.ioJTAG.jtag.TCK, 1)
     step(stepSize)
-    
+
     var i = 0
     //while (i < instructionLength) {
     while (i < dataLength - 1) {
@@ -85,14 +90,14 @@ class TLJTAGToMasterBlockTester(dut: TLJTAGToMasterBlock) extends PeekPokeTester
       step(stepSize)
       i += 1
     }
-    
+
     poke(dut.ioJTAG.jtag.TCK, 0)
-    poke(dut.ioJTAG.jtag.TMS, 1)  // 0
+    poke(dut.ioJTAG.jtag.TMS, 1) // 0
     poke(dut.ioJTAG.jtag.TDI, data.testBit(i))
     step(stepSize)
     poke(dut.ioJTAG.jtag.TCK, 1)
     step(stepSize)
-    
+
     poke(dut.ioJTAG.jtag.TCK, 0)
     poke(dut.ioJTAG.jtag.TMS, 1)
     poke(dut.ioJTAG.jtag.TDI, 0)
@@ -110,20 +115,19 @@ class TLJTAGToMasterBlockTester(dut: TLJTAGToMasterBlock) extends PeekPokeTester
     poke(dut.ioJTAG.jtag.TCK, 1)
     step(stepSize)
   }
-  
+
   val stepSize = 5
-  
+
   step(5)
   poke(dut.ioTL.a.ready, 1)
-  
+
   jtagReset(stepSize)
   jtagSend(BigInt("010", 2), 3, false, true, stepSize)
-  jtagSend(BigInt("0"*8 ++ "01010000", 2), 16, true, false, stepSize)
+  jtagSend(BigInt("0" * 8 ++ "01010000", 2), 16, true, false, stepSize)
   jtagSend(BigInt("011", 2), 3, false, false, stepSize)
   jtagSend(BigInt("00101000", 2), 8, true, false, stepSize)
   jtagSend(BigInt("001", 2), 3, false, false, stepSize)
-  
-  
+
   poke(dut.ioJTAG.jtag.TCK, 0)
   step(stepSize)
   poke(dut.ioJTAG.jtag.TCK, 1)
@@ -138,7 +142,7 @@ class TLJTAGToMasterBlockTester(dut: TLJTAGToMasterBlock) extends PeekPokeTester
   step(stepSize)
   poke(dut.ioJTAG.jtag.TCK, 0)
   step(stepSize)
-  
+
   step(10)
   poke(dut.ioTL.d.valid, 1)
   poke(dut.ioTL.d.bits.opcode, 0)
@@ -147,15 +151,13 @@ class TLJTAGToMasterBlockTester(dut: TLJTAGToMasterBlock) extends PeekPokeTester
   step(1)
   poke(dut.ioTL.d.valid, 0)
   step(10)
-  
-  
+
   jtagSend(BigInt("011", 2), 3, false, false, stepSize)
   jtagSend(BigInt("01101111", 2), 8, true, false, stepSize)
   jtagSend(BigInt("010", 2), 3, false, false, stepSize)
-  jtagSend(BigInt("0"*8 ++ "01110000", 2), 16, true, false, stepSize)
+  jtagSend(BigInt("0" * 8 ++ "01110000", 2), 16, true, false, stepSize)
   jtagSend(BigInt("001", 2), 3, false, false, stepSize)
-  
-  
+
   poke(dut.ioJTAG.jtag.TCK, 0)
   step(stepSize)
   poke(dut.ioJTAG.jtag.TCK, 1)
@@ -170,7 +172,7 @@ class TLJTAGToMasterBlockTester(dut: TLJTAGToMasterBlock) extends PeekPokeTester
   step(stepSize)
   poke(dut.ioJTAG.jtag.TCK, 0)
   step(stepSize)
-  
+
   step(10)
   poke(dut.ioTL.d.valid, 1)
   poke(dut.ioTL.d.bits.opcode, 0)
@@ -179,7 +181,7 @@ class TLJTAGToMasterBlockTester(dut: TLJTAGToMasterBlock) extends PeekPokeTester
   step(1)
   poke(dut.ioTL.d.valid, 0)
   step(10)
-  
+
   jtagSend(BigInt("100", 2), 3, false, false, stepSize)
   step(10)
   poke(dut.ioTL.d.valid, 1)
@@ -190,9 +192,9 @@ class TLJTAGToMasterBlockTester(dut: TLJTAGToMasterBlock) extends PeekPokeTester
   step(1)
   poke(dut.ioTL.d.valid, 0)
   step(10)
-  
+
   var i = 0
-  while(i < 4) {
+  while (i < 4) {
     poke(dut.ioJTAG.jtag.TCK, 1)
     step(stepSize)
     poke(dut.ioJTAG.jtag.TCK, 0)
@@ -210,9 +212,8 @@ class TLJTAGToMasterBlockTester(dut: TLJTAGToMasterBlock) extends PeekPokeTester
 
 }
 
-
 class AXI4JTAGToMasterBlockTester(dut: AXI4JTAGToMasterBlock) extends PeekPokeTester(dut.module) {
-  
+
   def jtagReset(stepSize: Int = 1) {
     var i = 0
     while (i < 5) {
@@ -224,9 +225,15 @@ class AXI4JTAGToMasterBlockTester(dut: AXI4JTAGToMasterBlock) extends PeekPokeTe
       i += 1
     }
   }
-  
-  def jtagSend(data: BigInt, dataLength: Int, data_notInstruction: Boolean = true, state_reset_notIdle: Boolean = true, stepSize: Int = 1) {
-    
+
+  def jtagSend(
+    data:                BigInt,
+    dataLength:          Int,
+    data_notInstruction: Boolean = true,
+    state_reset_notIdle: Boolean = true,
+    stepSize:            Int = 1
+  ) {
+
     if (state_reset_notIdle) {
       poke(dut.ioJTAG.jtag.TCK, 0)
       poke(dut.ioJTAG.jtag.TMS, 0)
@@ -234,13 +241,13 @@ class AXI4JTAGToMasterBlockTester(dut: AXI4JTAGToMasterBlock) extends PeekPokeTe
       poke(dut.ioJTAG.jtag.TCK, 1)
       step(stepSize)
     }
-    
+
     poke(dut.ioJTAG.jtag.TCK, 0)
     poke(dut.ioJTAG.jtag.TMS, 1)
     step(stepSize)
     poke(dut.ioJTAG.jtag.TCK, 1)
     step(stepSize)
-    
+
     if (!data_notInstruction) {
       poke(dut.ioJTAG.jtag.TCK, 0)
       poke(dut.ioJTAG.jtag.TMS, 1)
@@ -248,7 +255,7 @@ class AXI4JTAGToMasterBlockTester(dut: AXI4JTAGToMasterBlock) extends PeekPokeTe
       poke(dut.ioJTAG.jtag.TCK, 1)
       step(stepSize)
     }
-    
+
     poke(dut.ioJTAG.jtag.TCK, 0)
     poke(dut.ioJTAG.jtag.TMS, 0)
     step(stepSize)
@@ -259,7 +266,7 @@ class AXI4JTAGToMasterBlockTester(dut: AXI4JTAGToMasterBlock) extends PeekPokeTe
     step(stepSize)
     poke(dut.ioJTAG.jtag.TCK, 1)
     step(stepSize)
-    
+
     var i = 0
     while (i < dataLength - 1) {
       poke(dut.ioJTAG.jtag.TCK, 0)
@@ -270,42 +277,41 @@ class AXI4JTAGToMasterBlockTester(dut: AXI4JTAGToMasterBlock) extends PeekPokeTe
       step(stepSize)
       i += 1
     }
-    
+
     poke(dut.ioJTAG.jtag.TCK, 0)
-    poke(dut.ioJTAG.jtag.TMS, 1)  // 0
+    poke(dut.ioJTAG.jtag.TMS, 1) // 0
     poke(dut.ioJTAG.jtag.TDI, data.testBit(i))
     step(stepSize)
     poke(dut.ioJTAG.jtag.TCK, 1)
     step(stepSize)
-    
+
     poke(dut.ioJTAG.jtag.TCK, 0)
     poke(dut.ioJTAG.jtag.TMS, 1)
     poke(dut.ioJTAG.jtag.TDI, 0)
     step(stepSize)
     poke(dut.ioJTAG.jtag.TCK, 1)
     step(stepSize)
-    
+
     poke(dut.ioJTAG.jtag.TCK, 0)
     poke(dut.ioJTAG.jtag.TMS, 0)
     step(stepSize)
     poke(dut.ioJTAG.jtag.TCK, 1)
     step(stepSize)
   }
-  
+
   val stepSize = 5
-  
+
   step(5)
   poke(dut.ioAXI4.w.ready, 1)
   poke(dut.ioAXI4.aw.ready, 1)
-  
+
   jtagReset(stepSize)
   jtagSend(BigInt("010", 2), 3, false, true, stepSize)
-  jtagSend(BigInt("0"*8 ++ "01010000", 2), 16, true, false, stepSize)
+  jtagSend(BigInt("0" * 8 ++ "01010000", 2), 16, true, false, stepSize)
   jtagSend(BigInt("011", 2), 3, false, false, stepSize)
   jtagSend(BigInt("00101000", 2), 8, true, false, stepSize)
   jtagSend(BigInt("001", 2), 3, false, false, stepSize)
-  
-  
+
   poke(dut.ioJTAG.jtag.TCK, 0)
   step(stepSize)
   poke(dut.ioJTAG.jtag.TCK, 1)
@@ -320,22 +326,20 @@ class AXI4JTAGToMasterBlockTester(dut: AXI4JTAGToMasterBlock) extends PeekPokeTe
   step(stepSize)
   poke(dut.ioJTAG.jtag.TCK, 0)
   step(stepSize)
-  
+
   step(10)
   poke(dut.ioAXI4.b.valid, 1)
   poke(dut.ioAXI4.b.bits.resp, 0)
   step(1)
   poke(dut.ioAXI4.b.valid, 0)
   step(10)
-  
-  
+
   jtagSend(BigInt("011", 2), 3, false, false, stepSize)
   jtagSend(BigInt("01101111", 2), 8, true, false, stepSize)
   jtagSend(BigInt("010", 2), 3, false, false, stepSize)
-  jtagSend(BigInt("0"*8 ++ "01110000", 2), 16, true, false, stepSize)
+  jtagSend(BigInt("0" * 8 ++ "01110000", 2), 16, true, false, stepSize)
   jtagSend(BigInt("001", 2), 3, false, false, stepSize)
-  
-  
+
   poke(dut.ioJTAG.jtag.TCK, 0)
   step(stepSize)
   poke(dut.ioJTAG.jtag.TCK, 1)
@@ -350,7 +354,7 @@ class AXI4JTAGToMasterBlockTester(dut: AXI4JTAGToMasterBlock) extends PeekPokeTe
   step(stepSize)
   poke(dut.ioJTAG.jtag.TCK, 0)
   step(stepSize)
-  
+
   step(10)
   poke(dut.ioAXI4.b.valid, 1)
   poke(dut.ioAXI4.b.bits.resp, 0)
@@ -359,8 +363,6 @@ class AXI4JTAGToMasterBlockTester(dut: AXI4JTAGToMasterBlock) extends PeekPokeTe
   step(10)
 
 }
-
-
 
 class TLJTAGToMasterBlockSpec extends FlatSpec with Matchers {
   implicit val p: Parameters = Parameters.empty
@@ -368,17 +370,16 @@ class TLJTAGToMasterBlockSpec extends FlatSpec with Matchers {
   val beatBytes = 4
   val irLength = 3
   val initialInstruction = BigInt("0", 2)
-  val addresses = AddressSet(0x00000, 0xFFFF)
-  
+  val addresses = AddressSet(0x00000, 0xffff)
+
   it should "Test TL JTAG" in {
     val lazyDut = LazyModule(new TLJTAGToMasterBlock(irLength, initialInstruction, beatBytes, addresses) {})
 
-    chisel3.iotesters.Driver.execute(Array("-tiwv", "-tbn", "verilator", "-tivsuv"), () => lazyDut.module) {
-      c => new TLJTAGToMasterBlockTester(lazyDut)
-    } should be (true)
+    chisel3.iotesters.Driver.execute(Array("-tiwv", "-tbn", "verilator", "-tivsuv"), () => lazyDut.module) { c =>
+      new TLJTAGToMasterBlockTester(lazyDut)
+    } should be(true)
   }
 }
-
 
 class AXI4JTAGToMasterBlockSpec extends FlatSpec with Matchers {
   implicit val p: Parameters = Parameters.empty
@@ -386,17 +387,13 @@ class AXI4JTAGToMasterBlockSpec extends FlatSpec with Matchers {
   val beatBytes = 4
   val irLength = 3
   val initialInstruction = BigInt("0", 2)
-  val addresses = AddressSet(0x00000, 0xFFFF)
-  
+  val addresses = AddressSet(0x00000, 0xffff)
+
   it should "Test AXI4 JTAG" in {
     val lazyDut = LazyModule(new AXI4JTAGToMasterBlock(irLength, initialInstruction, beatBytes, addresses) {})
 
-    chisel3.iotesters.Driver.execute(Array("-tiwv", "-tbn", "verilator", "-tivsuv"), () => lazyDut.module) {
-      c => new AXI4JTAGToMasterBlockTester(lazyDut)
-    } should be (true)
+    chisel3.iotesters.Driver.execute(Array("-tiwv", "-tbn", "verilator", "-tivsuv"), () => lazyDut.module) { c =>
+      new AXI4JTAGToMasterBlockTester(lazyDut)
+    } should be(true)
   }
 }
-
-
-
-

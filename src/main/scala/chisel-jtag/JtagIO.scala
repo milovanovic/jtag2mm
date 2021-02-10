@@ -4,9 +4,7 @@ package jtag
 
 import chisel3._
 
-
 // This code was taken from https://github.com/ucb-art/chisel-jtag/blob/master/src/main/scala/jtag/jtagTap.scala and adjusted to our design needs
-
 
 /** JTAG signals, viewed from the device side.
   */
@@ -21,15 +19,15 @@ class JtagIO extends Bundle {
 /** JTAG block output signals.
   */
 class JtagOutput(irLength: Int) extends Bundle {
-  val state = Output(JtagState.State.chiselType())  // state, transitions on TCK rising edge
-  val instruction = Output(UInt(irLength.W))  // current active instruction
-  val reset = Output(Bool())  // synchronous reset asserted in Test-Logic-Reset state, should NOT hold the FSM in reset
+  val state = Output(JtagState.State.chiselType()) // state, transitions on TCK rising edge
+  val instruction = Output(UInt(irLength.W)) // current active instruction
+  val reset = Output(Bool()) // synchronous reset asserted in Test-Logic-Reset state, should NOT hold the FSM in reset
 
   override def cloneType = new JtagOutput(irLength).asInstanceOf[this.type]
 }
 
 class JtagControl extends Bundle {
-  val fsmAsyncReset = Input(Bool())  // TODO: asynchronous reset for FSM, used for TAP_POR*
+  val fsmAsyncReset = Input(Bool()) // TODO: asynchronous reset for FSM, used for TAP_POR*
 }
 
 /** Aggregate JTAG block IO.
