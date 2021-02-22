@@ -7,10 +7,6 @@ import chisel3.util._
 import chisel3.experimental._
 import chisel3.experimental.{withClockAndReset}
 
-//import dsptools._
-//mport dsptools.numbers._
-
-//import dspblocks._
 import freechips.rocketchip.amba.axi4._
 import freechips.rocketchip.amba.axi4stream._
 import freechips.rocketchip.config._
@@ -868,7 +864,6 @@ class JTAGToMasterAXI4(irLength: Int, initialInstruction: BigInt, beatBytes: Int
         controller.io.validIn := false.B
       }
     }
-
   }
 }
 
