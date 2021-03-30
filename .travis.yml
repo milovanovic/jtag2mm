@@ -18,4 +18,4 @@ install:
   - bash .install_verilator.sh
 
 script:
-  - set -o pipefail && sbt -Dchisel3Version=$CHISEL3 -Dchisel-iotestersVersion=$CHISEL_TESTERS "testOnly jtag2mm.AXI4JTAGToMasterBlockSpec"
+  - set -o pipefail && sbt -Dchisel3Version=$CHISEL3 -Dchisel-iotestersVersion=$CHISEL_TESTERS "testOnly jtag2mm.Jtag2AXI4MultiplexerSpec"

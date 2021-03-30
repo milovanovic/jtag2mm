@@ -1,6 +1,8 @@
 JTAG To Memory Master (JTAG2MM) Chisel Generator
 ========================================================
 
+[![Build Status](https://travis-ci.org/milovanovic/jtag2mm.svg?branch=master)](https://travis-ci.org/milovanovic/jtag2mm)
+
 ## Overview
 This repository contains a generator of JTAG to memory-mapped bus master modules, written in [Chisel](http://www.chisel-lang.org) hardware design language. Generated modules can initiate AXI4/TileLink(TL) transactions and drive AXI4/TL memory mapped slave(s) through an interconnect bus.
 
@@ -63,9 +65,11 @@ Before the write instruction, both address acquire and data acquire instructions
 
 ## Tests
 
-Several tests were used to verify the correctness of the module. They are defined inside the `src/test` directory. Three scala files and one python file exist:
+Several tests were used to verify the correctness of the module. They are defined inside the `src/test` directory. In order to verify the module, a simple streaming multiplexer module is defined for both TileLink and AXI4 interfaces. Moreover, JTAG Fuzzer module that initiate arbitrary number of TL/AXI4 write transactions when connected to JTAG2MM module is defined. These transactions' data and addresses are pseudo-random. JTAG Fuzzer module can be of great value for additional testing of JTAG2MM modules.
+
+Following tests are defined in this repository:
 * `scala/jtagToMasterTester.scala` - test file that includes basic test to checkout the interconnect bus signals for both AXI4 and TL protocols.
-* `scala/jtag2Axi4NCOTester.scala` - test used to verify the AXI4 variant of the module working with another module with memory mapped control registers connected to the AXI4 bus. [NCO](https://github.com/milovanovic/nco) 
-module is used.
-* `scala/jtag2TLPassthroughTester.scala` - test used to verify the TL variant of the module working with another module with memory mapped control registers connected to the TL bus. A custom passthrough module is used.
+* `scala/Jtag2TLMultiplexerTester.scala` - test used to verify the TL variant of the JTAG2MM module working with TLMultiplexer module with memory mapped control registers connected to the TL bus.
+* `scala/Jtag2AXI4MultiplexerTester.scala` - test used to verify the AXI4 variant of the JTAG2MM module working with AXI4Multiplexer module with memory mapped control registers connected to the AXI4 bus.
+* `scala/JtagFuzzerTester.scala`  - test used to verify the correctness of the output signals of the JTAG Fuzzer module.
 * `python/gpio_for_jtag.py` - test used for FPGA hardware verification of the AXI4 variant of the module working with another module with memory mapped control registers connected to the AXI4 bus.

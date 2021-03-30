@@ -24,7 +24,7 @@ class JtagToMasterControllerIO(irLength: Int, beatBytes: Int) extends JtagBlockI
   val receivedEnd = Output(Bool())
 }
 
-class topModuleIO extends Bundle {
+class TopModuleIO extends Bundle {
   val jtag = new JtagIO
   val asyncReset = Input(Bool())
 }
@@ -134,7 +134,7 @@ class JTAGToMasterTL[D, U, E, O, B <: Data](irLength: Int, initialInstruction: B
     )
   )
 
-  lazy val io = Wire(new topModuleIO)
+  lazy val io = Wire(new TopModuleIO)
 
   lazy val module = new LazyModuleImp(this) {
 
@@ -166,7 +166,7 @@ class JTAGToMasterTL[D, U, E, O, B <: Data](irLength: Int, initialInstruction: B
     currentInstruction := controller.io.output.instruction
 
     val dataValue = RegInit(UInt((beatBytes * 8).W), 0.U)
-    val addressValue = RegInit(UInt((beatBytes * 4).W), 0.U)
+    val addressValue = RegInit(UInt(((beatBytes/2) * 8).W), 0.U)
 
     val burstTotalNumber = RegInit(UInt(8.W), 0.U)
     val burstCurrentNumber = RegInit(UInt(8.W), 0.U)
@@ -177,7 +177,7 @@ class JTAGToMasterTL[D, U, E, O, B <: Data](irLength: Int, initialInstruction: B
     }
 
     when(currentInstruction === "b0010".U) {
-      addressValue := controller.io.dataOut >> (beatBytes * 4)
+      addressValue := controller.io.dataOut >> ((beatBytes/2) * 8)
     }
 
     when(currentInstruction === "b1000".U) {
@@ -193,14 +193,14 @@ class JTAGToMasterTL[D, U, E, O, B <: Data](irLength: Int, initialInstruction: B
     }
 
     val shouldWrite = RegInit(Bool(), false.B)
-    when((currentInstruction === "b001".U) && (RegNext(currentInstruction) =/= "b001".U)) {
+    when((currentInstruction === "b0001".U) && (RegNext(currentInstruction) =/= "b0001".U)) {
       shouldWrite := true.B
     }.elsewhen(state === State.sSetDataA) {
       shouldWrite := false.B
     }
 
     val shouldRead = RegInit(Bool(), false.B)
-    when((currentInstruction === "b100".U) && (RegNext(currentInstruction) =/= "b100".U)) {
+    when((currentInstruction === "b0100".U) && (RegNext(currentInstruction) =/= "b0100".U)) {
       shouldRead := true.B
     }.elsewhen(state === State.sSetReadAddress) {
       shouldRead := false.B
@@ -230,7 +230,11 @@ class JTAGToMasterTL[D, U, E, O, B <: Data](irLength: Int, initialInstruction: B
     val burstCounter = RegInit(UInt(8.W), 0.U)
 
     val size = if (beatBytes == 4) 2 else 3
+    val mask = if (beatBytes == 4) 15 else 255
 
+    dontTouch(tl.a.bits.data)
+    dontTouch(dataValue)
+    
     switch(state) {
       is(State.sIdle) {
         when(shouldWrite) {
@@ -251,7 +255,7 @@ class JTAGToMasterTL[D, U, E, O, B <: Data](irLength: Int, initialInstruction: B
         tl.a.bits.size := size.U
         tl.a.bits.source := 0.U
         tl.a.bits.address := 0.U
-        tl.a.bits.mask := 255.U
+        tl.a.bits.mask := mask.U
         tl.a.bits.data := 0.U
 
         controller.io.validIn := false.B
@@ -273,7 +277,7 @@ class JTAGToMasterTL[D, U, E, O, B <: Data](irLength: Int, initialInstruction: B
         tl.a.bits.size := size.U
         tl.a.bits.source := 0.U
         tl.a.bits.address := addressValue
-        tl.a.bits.mask := 255.U
+        tl.a.bits.mask := mask.U
         tl.a.bits.data := dataValue
 
         controller.io.validIn := false.B
@@ -292,7 +296,7 @@ class JTAGToMasterTL[D, U, E, O, B <: Data](irLength: Int, initialInstruction: B
         tl.a.bits.size := size.U
         tl.a.bits.source := 0.U
         tl.a.bits.address := addressValue
-        tl.a.bits.mask := 255.U
+        tl.a.bits.mask := mask.U
         tl.a.bits.data := 0.U
 
         readData := tl.d.bits.data
@@ -313,7 +317,7 @@ class JTAGToMasterTL[D, U, E, O, B <: Data](irLength: Int, initialInstruction: B
         tl.a.bits.size := size.U
         tl.a.bits.source := 0.U
         tl.a.bits.address := 0.U
-        tl.a.bits.mask := 255.U
+        tl.a.bits.mask := mask.U
         tl.a.bits.data := 0.U
 
         controller.io.validIn := true.B
@@ -333,7 +337,7 @@ class JTAGToMasterTL[D, U, E, O, B <: Data](irLength: Int, initialInstruction: B
         tl.a.bits.size := size.U
         tl.a.bits.source := 0.U
         tl.a.bits.address := addressValue + beatBytes.U * burstCounter
-        tl.a.bits.mask := 255.U
+        tl.a.bits.mask := mask.U
         tl.a.bits.data := dataValueBurst(burstCounter)
 
         controller.io.validIn := false.B
@@ -353,7 +357,7 @@ class JTAGToMasterTL[D, U, E, O, B <: Data](irLength: Int, initialInstruction: B
         tl.a.bits.size := size.U
         tl.a.bits.source := 0.U
         tl.a.bits.address := 0.U
-        tl.a.bits.mask := 255.U
+        tl.a.bits.mask := mask.U
         tl.a.bits.data := 0.U
 
         controller.io.validIn := false.B
@@ -374,7 +378,7 @@ class JTAGToMasterTL[D, U, E, O, B <: Data](irLength: Int, initialInstruction: B
         tl.a.bits.size := size.U
         tl.a.bits.source := 0.U
         tl.a.bits.address := addressValue + beatBytes.U * burstCounter
-        tl.a.bits.mask := 255.U
+        tl.a.bits.mask := mask.U
         tl.a.bits.data := 0.U
 
         readData := tl.d.bits.data
@@ -394,7 +398,7 @@ class JTAGToMasterTL[D, U, E, O, B <: Data](irLength: Int, initialInstruction: B
         tl.a.bits.size := size.U
         tl.a.bits.source := 0.U
         tl.a.bits.address := 0.U
-        tl.a.bits.mask := 255.U
+        tl.a.bits.mask := mask.U
         tl.a.bits.data := 0.U
 
         //readData := tl.d.bits.data
@@ -416,7 +420,7 @@ class JTAGToMasterTL[D, U, E, O, B <: Data](irLength: Int, initialInstruction: B
         tl.a.bits.size := size.U
         tl.a.bits.source := 0.U
         tl.a.bits.address := 0.U
-        tl.a.bits.mask := 255.U
+        tl.a.bits.mask := mask.U
         tl.a.bits.data := 0.U
 
         controller.io.validIn := true.B
@@ -463,8 +467,8 @@ class TLJTAGToMasterBlock(
     }
   }
 
-  def makeIO2(): topModuleIO = {
-    val io2: topModuleIO = IO(io.cloneType)
+  def makeIO2(): TopModuleIO = {
+    val io2: TopModuleIO = IO(io.cloneType)
     io2.suggestName("ioJTAG")
     io2 <> io
     io2
@@ -498,7 +502,7 @@ class JTAGToMasterAXI4(irLength: Int, initialInstruction: BigInt, beatBytes: Int
 
   val node = Some(AXI4MasterNode(Seq(AXI4MasterPortParameters(Seq(AXI4MasterParameters("ioAXI4"))))))
 
-  lazy val io = Wire(new topModuleIO)
+  lazy val io = Wire(new TopModuleIO)
 
   lazy val module = new LazyModuleImp(this) {
 
@@ -878,8 +882,8 @@ class AXI4JTAGToMasterBlock(
     extends JTAGToMasterAXI4(irLength, initialInstruction, beatBytes, addresses, burstMaxNum) {
   require(burstMaxNum <= 128)
 
-  def makeIO2(): topModuleIO = {
-    val io2: topModuleIO = IO(io.cloneType)
+  def makeIO2(): TopModuleIO = {
+    val io2: TopModuleIO = IO(io.cloneType)
     io2.suggestName("ioJTAG")
     io2 <> io
     io2

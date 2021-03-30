@@ -41,12 +41,12 @@ class TLJTAGToMasterBlockTester(dut: TLJTAGToMasterBlock) extends PeekPokeTester
   def jtagSend(
     data:                BigInt,
     dataLength:          Int,
-    data_notInstruction: Boolean = true,
-    state_reset_notIdle: Boolean = true,
+    dataNotInstruction: Boolean = true,
+    stateResetNotIdle: Boolean = true,
     stepSize:            Int = 1
   ) {
 
-    if (state_reset_notIdle) {
+    if (stateResetNotIdle) {
       poke(dut.ioJTAG.jtag.TCK, 0)
       poke(dut.ioJTAG.jtag.TMS, 0)
       step(stepSize)
@@ -60,7 +60,7 @@ class TLJTAGToMasterBlockTester(dut: TLJTAGToMasterBlock) extends PeekPokeTester
     poke(dut.ioJTAG.jtag.TCK, 1)
     step(stepSize)
 
-    if (!data_notInstruction) {
+    if (!dataNotInstruction) {
       poke(dut.ioJTAG.jtag.TCK, 0)
       poke(dut.ioJTAG.jtag.TMS, 1)
       step(stepSize)
@@ -229,12 +229,12 @@ class AXI4JTAGToMasterBlockTester(dut: AXI4JTAGToMasterBlock) extends PeekPokeTe
   def jtagSend(
     data:                BigInt,
     dataLength:          Int,
-    data_notInstruction: Boolean = true,
-    state_reset_notIdle: Boolean = true,
+    dataNotInstruction: Boolean = true,
+    stateResetNotIdle: Boolean = true,
     stepSize:            Int = 1
   ) {
 
-    if (state_reset_notIdle) {
+    if (stateResetNotIdle) {
       poke(dut.ioJTAG.jtag.TCK, 0)
       poke(dut.ioJTAG.jtag.TMS, 0)
       step(stepSize)
@@ -248,7 +248,7 @@ class AXI4JTAGToMasterBlockTester(dut: AXI4JTAGToMasterBlock) extends PeekPokeTe
     poke(dut.ioJTAG.jtag.TCK, 1)
     step(stepSize)
 
-    if (!data_notInstruction) {
+    if (!dataNotInstruction) {
       poke(dut.ioJTAG.jtag.TCK, 0)
       poke(dut.ioJTAG.jtag.TMS, 1)
       step(stepSize)
