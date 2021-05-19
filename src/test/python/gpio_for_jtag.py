@@ -57,32 +57,32 @@ signalArray = []
 signalArray = jtagInit(signalArray)
 
 #multiply enable
-signalArray = jtagSend(signalArray, 0x03, 3, False)
+signalArray = jtagSend(signalArray, 0x03, 4, False)
 signalArray = jtagSend(signalArray, 0x00000001, 32, True)
-signalArray = jtagSend(signalArray, 0x02, 3, False)
+signalArray = jtagSend(signalArray, 0x02, 4, False)
 signalArray = jtagSend(signalArray, 0x0000, 16, True)
-signalArray = jtagSend(signalArray, 0x01, 3, False)
+signalArray = jtagSend(signalArray, 0x01, 4, False)
 
 #multiplying factor
-signalArray = jtagSend(signalArray, 0x03, 3, False)
+signalArray = jtagSend(signalArray, 0x03, 4, False)
 signalArray = jtagSend(signalArray, 0x00001000, 32, True)
-signalArray = jtagSend(signalArray, 0x02, 3, False)
-signalArray = jtagSend(signalArray, 0x0004, 16, True)
-signalArray = jtagSend(signalArray, 0x01, 3, False)
+signalArray = jtagSend(signalArray, 0x02, 4, False)
+signalArray = jtagSend(signalArray, 0x00000004, 32, True)
+signalArray = jtagSend(signalArray, 0x01, 4, False)
 
 #freq value
-signalArray = jtagSend(signalArray, 0x03, 3, False)
+signalArray = jtagSend(signalArray, 0x03, 4, False)
 signalArray = jtagSend(signalArray, 0x00000008, 32, True)
-signalArray = jtagSend(signalArray, 0x02, 3, False)
-signalArray = jtagSend(signalArray, 0x000C, 16, True)
-signalArray = jtagSend(signalArray, 0x01, 3, False)
+signalArray = jtagSend(signalArray, 0x02, 4, False)
+signalArray = jtagSend(signalArray, 0x0000000C, 32, True)
+signalArray = jtagSend(signalArray, 0x01, 4, False)
 
 #nco enable
-signalArray = jtagSend(signalArray, 0x03, 3, False)
+signalArray = jtagSend(signalArray, 0x03, 4, False)
 signalArray = jtagSend(signalArray, 0x00000001, 32, True)
-signalArray = jtagSend(signalArray, 0x02, 3, False)
-signalArray = jtagSend(signalArray, 0x0008, 16, True)
-signalArray = jtagSend(signalArray, 0x01, 3, False)
+signalArray = jtagSend(signalArray, 0x02, 4, False)
+signalArray = jtagSend(signalArray, 0x00000008, 32, True)
+signalArray = jtagSend(signalArray, 0x01, 4, False)
 
 
 gpio.write(signalArray)

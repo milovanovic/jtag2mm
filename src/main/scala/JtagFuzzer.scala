@@ -28,8 +28,8 @@ class JtagFuzzer(irLength: Int, beatBytes: Int, numOfTransfers: Int) extends Mod
     val sIdle, sTCK, sTMS, sTCKandTMS, sNone, sDataTCK, sDataTMS, sDataTCKandTMS, sDataNone  = Value
   }
   
-  val lfsrAddrReg = RegInit(UInt(16.W), 0.U)
-  lfsrAddrReg := LFSR(14) << 2
+  val lfsrAddrReg = RegInit(UInt(32.W), 0.U)
+  lfsrAddrReg := LFSR(30) << 2
   val lfsrDataReg = RegInit(UInt(32.W), 0.U)
   lfsrDataReg := LFSR(32)
   
