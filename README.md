@@ -4,7 +4,7 @@ JTAG To Memory Master (JTAG2MM) Chisel Generator
 [![Build Status](https://travis-ci.org/milovanovic/jtag2mm.svg?branch=master)](https://travis-ci.org/milovanovic/jtag2mm)
 
 ## Overview
-This repository contains a generator of JTAG to memory-mapped bus master modules, written in [Chisel](http://www.chisel-lang.org) hardware design language. Generated modules can initiate AXI4/TileLink(TL) transactions and drive AXI4/TL memory mapped slave(s) through an interconnect bus.
+This repository contains a generator of JTAG to memory-mapped bus master modules, written in [Chisel](http://www.chisel-lang.org) hardware design language. Generated modules can initiate AXI4/TileLink(TL) transactions and drive AXI4/TL memory mapped slave(s) through an interconnect bus. More information about this generator can be found among the proceedings of [the 2021 IcETRAN international condference](https://www.etran.rs/2021/zbornik/Papers/047_ELI_1.4.pdf).
 
 To make a Chisel project and include JTAG2MM generator, an open source starter template [Chipyard Framework](http://github.com/ucb-bar/chipyard) can be used.
 
